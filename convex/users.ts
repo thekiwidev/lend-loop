@@ -43,6 +43,8 @@ export const me = query({
       .collect();
     return {
       name: user.name,
+      // The caller's own address only; other people's emails never reach the client.
+      email: user.email,
       trustedLender: user.trustedLender,
       isAdmin: hasAdminRole(identity),
       counts: {

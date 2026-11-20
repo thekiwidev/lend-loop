@@ -1,6 +1,6 @@
 "use client";
 
-import { SignOutButton } from "@clerk/nextjs";
+import { useAuth, useClerk } from "@clerk/nextjs";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { usePathname } from "next/navigation";
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
@@ -29,16 +29,20 @@ function activeId(pathname: string): string {
 
 /**
  * Sidebar and main column for every signed-in page. Upserts the user row once, then renders
- * the page; pages query Convex only after that, so their access checks find the user.
+ * the page; pages query Convex only while signed in and after that, so their access checks
+ * find the user and signing out never leaves a page querying without a token.
  */
 export function AppShell({ children }: { children: ReactNode }) {
+  const { isSignedIn } = useAuth();
+  const clerk = useClerk();
   const { isAuthenticated, isLoading } = useConvexAuth();
   const sync = useMutation(api.users.sync);
   const [synced, setSynced] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const pathname = usePathname();
-  const me = useQuery(api.users.me, synced ? {} : "skip");
+  const ready = isAuthenticated && synced;
+  const me = useQuery(api.users.me, ready ? {} : "skip");
 
   useEffect(() => {
     if (!isAuthenticated || synced) return;
@@ -59,13 +63,14 @@ export function AppShell({ children }: { children: ReactNode }) {
   let content: ReactNode;
   if (syncError) {
     content = <Banner tone="danger" title="Couldn’t set up your account" action={<Button size="sm" onClick={() => setSyncError(null)}>Try again</Button>}>{syncError}</Banner>;
-  } else if (!isLoading && !isAuthenticated) {
+  } else if (isSignedIn && !isLoading && !isAuthenticated) {
     content = (
       <Banner tone="danger" title="LendLoop couldn’t confirm your sign-in">
         Clerk signed you in but Convex rejected the token. Check the Clerk JWT template named convex and CLERK_JWT_ISSUER_DOMAIN.
       </Banner>
     );
-  } else if (!synced) {
+  } else if (!ready) {
+    // Also covers signing out: the page unmounts before its queries lose their token.
     content = <Skeleton lines={4} />;
   } else {
     content = children;
@@ -78,15 +83,14 @@ export function AppShell({ children }: { children: ReactNode }) {
           items={items}
           active={activeId(pathname)}
           onNavigate={() => setDrawerOpen(false)}
-          user={me ? { name: me.name, role: role || "Neighbour", trusted: me.trustedLender } : undefined}
+          user={me ? { name: me.name, email: me.email, role: role || "Neighbour", trusted: me.trustedLender } : undefined}
+          userActions={[
+            { label: "Manage account", icon: "users", onClick: () => clerk.openUserProfile() },
+            { label: "Sign out", icon: "logout", onClick: () => clerk.signOut({ redirectUrl: "/" }) },
+          ]}
           footer={
-            <div style={{ padding: "0 8px", display: "flex", flexDirection: "column", gap: 8 }}>
-              <ThemeToggle />
-              <SignOutButton redirectUrl="/">
-                <Button variant="ghost" size="sm" icon="logout" block>
-                  Sign out
-                </Button>
-              </SignOutButton>
+            <div className="ll-sidebar__theme">
+              <ThemeToggle compact />
             </div>
           }
         />
