@@ -1,0 +1,187 @@
+{
+  "id": "LLerrorHandler01",
+  "name": "LendLoop: error handler",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "63b7a2ec-7bf7-520b-add0-ed58daed9bdd",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "82f9dd3b-b557-5a88-a181-4c62fd49b4b8",
+              "name": "timestamp",
+              "value": "={{ String(Math.floor(Date.now() / 1000)) }}",
+              "type": "string"
+            },
+            {
+              "id": "a5599ea8-7e2f-5076-9edb-4cebf0400f2c",
+              "name": "ackBody",
+              "value": "={{ JSON.stringify({ idempotencyKey: 'error:' + $('Error Trigger').item.json.execution.id, kind: 'workflow_error', status: 'failed', detail: ($('Error Trigger').item.json.workflow.name + ': ' + ($('Error Trigger').item.json.execution.lastNodeExecuted || 'unknown node') + ': ' + (($('Error Trigger').item.json.execution.error || {}).message || 'unknown error')).slice(0, 280) }) }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "id": "25f526fc-7c2b-508d-bfe8-bcf84e7d11aa",
+      "name": "Build ack",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "={{ $json.timestamp }}.POST./automation/ack.{{ $json.ackBody }}",
+        "dataPropertyName": "signature",
+        "secret": "={{ $env.LENDLOOP_N8N_SECRET }}",
+        "encoding": "hex"
+      },
+      "id": "8b01c035-fb93-5812-9f70-dd53484b8866",
+      "name": "Sign ack",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        440,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CONVEX_SITE_URL }}/automation/ack",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-LendLoop-Timestamp",
+              "value": "={{ $json.timestamp }}"
+            },
+            {
+              "name": "X-LendLoop-Signature",
+              "value": "={{ $json.signature }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.ackBody }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "438f94ae-1465-51cd-986c-a0cacc23da86",
+      "name": "Tell Convex",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        200
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.resend.com/emails",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.RESEND_API_KEY }}"
+            },
+            {
+              "name": "Idempotency-Key",
+              "value": "={{ 'alert:' + $('Error Trigger').item.json.execution.id }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ from: $env.EMAIL_FROM, to: [$env.ADMIN_ALERT_EMAIL], subject: 'LendLoop automation failed: ' + $('Error Trigger').item.json.workflow.name, text: 'A LendLoop workflow failed.\\n\\n' + ($('Error Trigger').item.json.workflow.name + ': ' + ($('Error Trigger').item.json.execution.lastNodeExecuted || 'unknown node') + ': ' + (($('Error Trigger').item.json.execution.error || {}).message || 'unknown error')).slice(0, 280) + '\\n\\nExecution: ' + ($('Error Trigger').item.json.execution.url || $('Error Trigger').item.json.execution.id) }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "4b057636-ec77-5c92-8130-7c056a867072",
+      "name": "Alert admin",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        220,
+        420
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    }
+  ],
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Build ack",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Alert admin",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build ack": {
+      "main": [
+        [
+          {
+            "node": "Sign ack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sign ack": {
+      "main": [
+        [
+          {
+            "node": "Tell Convex",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all"
+  },
+  "pinData": {},
+  "tags": []
+}

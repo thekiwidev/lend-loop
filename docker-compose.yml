@@ -1,0 +1,24 @@
+# Local n8n for LendLoop. Start with `docker compose up -d`, then open http://localhost:5678.
+services:
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:2.46.6
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    env_file: .env.n8n
+    environment:
+      # Workflows read the signing secret, Resend key and URLs from this container's env
+      # (`$env.*`), so none of them are stored in the exported workflow JSON.
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_PERSONALIZATION_ENABLED: "false"
+      WEBHOOK_URL: http://localhost:5678/
+    extra_hosts:
+      # Lets n8n reach the Convex local backend on the host, on Linux as well as Docker Desktop.
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./n8n:/workflows:ro
+
+volumes:
+  n8n_data:

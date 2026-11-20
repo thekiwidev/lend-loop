@@ -1,0 +1,406 @@
+{
+  "id": "LLoverdueRemind1",
+  "name": "LendLoop: overdue reminders",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      },
+      "id": "f642358c-6583-5c3e-a73c-bebdb1aaaec8",
+      "name": "Every day at 09:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        200
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "cacf209c-8846-54b6-942d-52f661aebce6",
+      "name": "Run now",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "513b82ff-2a79-5b07-a588-8b48820311dd",
+              "name": "timestamp",
+              "value": "={{ String(Math.floor(Date.now() / 1000)) }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "id": "d73fe599-011f-5455-89e8-e82b082190f3",
+      "name": "Start request",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "={{ $json.timestamp }}.GET./automation/overdue.",
+        "dataPropertyName": "signature",
+        "secret": "={{ $env.LENDLOOP_N8N_SECRET }}",
+        "encoding": "hex"
+      },
+      "id": "8ee23d3b-e6b9-5841-a1b8-d61ac73d49e3",
+      "name": "Sign request",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.CONVEX_SITE_URL }}/automation/overdue",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-LendLoop-Timestamp",
+              "value": "={{ $json.timestamp }}"
+            },
+            {
+              "name": "X-LendLoop-Signature",
+              "value": "={{ $json.signature }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "a2225a28-2507-5a59-b9a4-91096f8faa0b",
+      "name": "Fetch overdue loans",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        300
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "loans",
+        "options": {}
+      },
+      "id": "48f9fac5-734f-5a10-898d-ad44e6455bbd",
+      "name": "Split loans",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        880,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.resend.com/emails",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.RESEND_API_KEY }}"
+            },
+            {
+              "name": "Idempotency-Key",
+              "value": "={{ $('Split loans').item.json.idempotencyKey }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ from: $env.EMAIL_FROM, to: [$('Split loans').item.json.borrowerEmail], subject: 'Reminder: the ' + $('Split loans').item.json.toolName.toLowerCase() + ' is overdue', text: 'Hi ' + $('Split loans').item.json.borrowerName.split(' ')[0] + ',\\n\\nThe ' + $('Split loans').item.json.toolName.toLowerCase() + ' was due back on ' + $('Split loans').item.json.endDate + '. Please return it, or message the owner if you need longer.\\n\\nLendLoop, your street\\'s shared shed.' }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "c177e831-8575-5bd1-afaa-a6692e7fa2dd",
+      "name": "Send reminder",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        300
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "951ade63-ee75-53c1-b48f-b605c2dd4205",
+              "name": "timestamp",
+              "value": "={{ String(Math.floor(Date.now() / 1000)) }}",
+              "type": "string"
+            },
+            {
+              "id": "76fa2d77-27c3-506d-9a48-1f10ce03449e",
+              "name": "ackBody",
+              "value": "={{ JSON.stringify({ idempotencyKey: $('Split loans').item.json.idempotencyKey, loanId: $('Split loans').item.json.loanId, kind: 'overdue_reminder', status: 'sent' }) }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "id": "9666249b-5f7a-5d1e-977f-c8cc403602c3",
+      "name": "Reminder sent",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1320,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "e1619108-4f44-5d5c-aa73-259e6354ac7d",
+              "name": "timestamp",
+              "value": "={{ String(Math.floor(Date.now() / 1000)) }}",
+              "type": "string"
+            },
+            {
+              "id": "41781f4a-2867-57f3-9ea8-ac047e3d1ef0",
+              "name": "ackBody",
+              "value": "={{ JSON.stringify({ idempotencyKey: $('Split loans').item.json.idempotencyKey, loanId: $('Split loans').item.json.loanId, kind: 'overdue_reminder', status: 'failed', detail: 'Resend refused the reminder' }) }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "id": "ecaa0993-4114-5e01-8b4e-a02bfe1f5410",
+      "name": "Reminder failed",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1320,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "={{ $json.timestamp }}.POST./automation/ack.{{ $json.ackBody }}",
+        "dataPropertyName": "signature",
+        "secret": "={{ $env.LENDLOOP_N8N_SECRET }}",
+        "encoding": "hex"
+      },
+      "id": "8b01c035-fb93-5812-9f70-dd53484b8866",
+      "name": "Sign ack",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        1540,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CONVEX_SITE_URL }}/automation/ack",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-LendLoop-Timestamp",
+              "value": "={{ $json.timestamp }}"
+            },
+            {
+              "name": "X-LendLoop-Signature",
+              "value": "={{ $json.signature }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.ackBody }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "438f94ae-1465-51cd-986c-a0cacc23da86",
+      "name": "Tell Convex",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1760,
+        300
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    }
+  ],
+  "connections": {
+    "Every day at 09:00": {
+      "main": [
+        [
+          {
+            "node": "Start request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run now": {
+      "main": [
+        [
+          {
+            "node": "Start request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Start request": {
+      "main": [
+        [
+          {
+            "node": "Sign request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sign request": {
+      "main": [
+        [
+          {
+            "node": "Fetch overdue loans",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch overdue loans": {
+      "main": [
+        [
+          {
+            "node": "Split loans",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split loans": {
+      "main": [
+        [
+          {
+            "node": "Send reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send reminder": {
+      "main": [
+        [
+          {
+            "node": "Reminder sent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reminder failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reminder sent": {
+      "main": [
+        [
+          {
+            "node": "Sign ack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reminder failed": {
+      "main": [
+        [
+          {
+            "node": "Sign ack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sign ack": {
+      "main": [
+        [
+          {
+            "node": "Tell Convex",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "errorWorkflow": "LLerrorHandler01"
+  },
+  "pinData": {},
+  "tags": []
+}

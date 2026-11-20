@@ -1,0 +1,98 @@
+/* LendLoop — generated from tokens.json */
+:root, [data-theme="light"] {
+  --surface-0: #f6f3ec;
+  --surface-1: #fffdf8;
+  --surface-2: #efeae0;
+  --line: #e3dccf;
+  --line-strong: #8e8574;
+  --ink: #1f231e;
+  --ink-muted: #5c6157;
+  --ink-subtle: #686d61;
+  --ink-inverse: #fffdf8;
+  --pine: #24573f;
+  --pine-hover: #1b4532;
+  --pine-soft: #dcebe1;
+  --on-pine: #ffffff;
+  --brass: #e4a23a;
+  --brass-soft: #f7e6c6;
+  --brass-ink: #7a4a0c;
+  --on-brass: #2a1d08;
+  --sky-soft: #dde8f4;
+  --sky-ink: #1f4f80;
+  --clay: #b3361f;
+  --clay-soft: #f8dfd8;
+  --clay-ink: #a12f1a;
+  --on-clay: #ffffff;
+  --focus: var(--pine);
+  --backdrop: rgba(20, 22, 19, 0.45);
+  --shadow-sm: 0 1px 2px rgba(31, 35, 30, 0.06), 0 1px 1px rgba(31, 35, 30, 0.04);
+  --shadow-md: 0 6px 16px rgba(31, 35, 30, 0.08), 0 1px 3px rgba(31, 35, 30, 0.06);
+  --shadow-pop: 0 18px 44px rgba(31, 35, 30, 0.18), 0 2px 6px rgba(31, 35, 30, 0.08);
+}
+[data-theme="dark"] {
+  --surface-0: #121411;
+  --surface-1: #1b1e1a;
+  --surface-2: #242823;
+  --line: #2e332d;
+  --line-strong: #6f776b;
+  --ink: #eeece4;
+  --ink-muted: #a6aa9f;
+  --ink-subtle: #8d9286;
+  --ink-inverse: #1b1e1a;
+  --pine: #6cc596;
+  --pine-hover: #86d4a9;
+  --pine-soft: #1d3328;
+  --on-pine: #0f1a14;
+  --brass: #e9b25a;
+  --brass-soft: #3a2c14;
+  --brass-ink: #f0c77a;
+  --on-brass: #2a1d08;
+  --sky-soft: #1a2b3d;
+  --sky-ink: #9cc4ee;
+  --clay: #f08a70;
+  --clay-soft: #3d1f18;
+  --clay-ink: #f4a590;
+  --on-clay: #2a0f08;
+  --focus: var(--pine);
+  --backdrop: rgba(0, 0, 0, 0.62);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.45);
+  --shadow-md: 0 8px 20px rgba(0, 0, 0, 0.5);
+  --shadow-pop: 0 22px 52px rgba(0, 0, 0, 0.66);
+}
+:root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-14: 56px;
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-pill: 999px;
+  --sidebar-width: 248px;
+  --rail-width: 72px;
+  --topbar-height: 64px;
+  --content-max: 1280px;
+  --bp-md: 768px;
+  --bp-lg: 1024px;
+  --font-display: "Bricolage Grotesque", "Figtree", system-ui, sans-serif;
+  --font-sans: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+.display-xl { font-family: var(--font-display); font-size: 48px; line-height: 52px; font-weight: 750; letter-spacing: -0.03em; }
+.display-lg { font-family: var(--font-display); font-size: 34px; line-height: 40px; font-weight: 700; letter-spacing: -0.02em; }
+.title { font-family: var(--font-display); font-size: 22px; line-height: 28px; font-weight: 700; letter-spacing: -0.015em; }
+.heading { font-family: var(--font-display); font-size: 18px; line-height: 24px; font-weight: 650; letter-spacing: -0.01em; }
+.stat { font-family: var(--font-display); font-size: 32px; line-height: 36px; font-weight: 700; letter-spacing: -0.02em; }
+.body { font-family: var(--font-sans); font-size: 15px; line-height: 22px; font-weight: 400; }
+.body-sm { font-family: var(--font-sans); font-size: 14px; line-height: 20px; font-weight: 400; }
+.label { font-family: var(--font-sans); font-size: 13px; line-height: 18px; font-weight: 600; }
+.caption { font-family: var(--font-sans); font-size: 12px; line-height: 16px; font-weight: 500; }
+.overline { font-family: var(--font-sans); font-size: 11px; line-height: 16px; font-weight: 700; letter-spacing: 0.08em; }
+.mono { font-family: var(--font-mono); font-size: 13px; line-height: 20px; font-weight: 500; }

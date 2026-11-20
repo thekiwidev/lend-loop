@@ -1,26 +1,66 @@
-@import "tailwindcss";
+/* Tailwind theme and utilities only: no preflight, so the design system's own base styles hold. */
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+@import "./tokens.css";
+@import "./components.css";
 
+/* next/font exposes hashed family names; point the design tokens at them. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --font-display: var(--ll-font-display), "Figtree", system-ui, sans-serif;
+  --font-sans: var(--ll-font-sans), system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: var(--ll-font-mono), ui-monospace, "SF Mono", Menlo, monospace;
 }
 
+/* Tailwind utilities read the same tokens as the components. */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-surface-0: var(--surface-0);
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--line);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-subtle: var(--ink-subtle);
+  --color-pine: var(--pine);
+  --color-pine-soft: var(--pine-soft);
+  --color-brass: var(--brass);
+  --color-brass-ink: var(--brass-ink);
+  --color-sky-ink: var(--sky-ink);
+  --color-clay: var(--clay);
+  --color-clay-ink: var(--clay-ink);
+  --font-display: var(--font-display);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* App-only additions, built from the same tokens. */
+.ll-landing { max-width: var(--content-max); margin: 0 auto; padding: var(--space-8) var(--space-8) var(--space-14); display: flex; flex-direction: column; gap: var(--space-10); }
+.ll-landing__head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); }
+.ll-landing__hero { display: flex; flex-direction: column; gap: var(--space-4); max-width: 720px; }
+.ll-landing__hero p { margin: 0; color: var(--ink-muted); }
+.ll-landing__hero h1 { margin: 0; color: var(--ink); }
+.ll-auth { min-height: 100vh; display: grid; place-items: center; gap: var(--space-6); padding: var(--space-8) var(--space-4); align-content: center; }
+.ll-form { display: flex; flex-direction: column; gap: var(--space-4); }
+.ll-form__row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); }
+.ll-iconpicker { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+.ll-iconpicker legend { padding: 0; }
+.ll-iconpicker__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: var(--space-2); }
+.ll-iconpicker__group { margin: var(--space-2) 0 0; color: var(--ink-muted); }
+.ll-iconpicker__opt { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: var(--space-2); border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-1); color: var(--ink); cursor: pointer; font-size: 11px; line-height: 14px; text-align: center; transition: background 120ms ease-out, border-color 120ms ease-out; }
+.ll-iconpicker__opt:hover { background: var(--surface-2); }
+.ll-iconpicker__opt input { position: absolute; opacity: 0; pointer-events: none; }
+.ll-iconpicker__opt:has(input:checked) { border-color: var(--pine); background: var(--pine-soft); }
+.ll-iconpicker__opt:has(input:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ll-switch { display: inline-flex; align-items: center; gap: var(--space-2); border: 0; background: none; padding: 0; color: var(--ink); font: inherit; cursor: pointer; }
+.ll-switch__track { width: 36px; height: 20px; border-radius: var(--radius-pill); border: 1px solid var(--line-strong); background: var(--surface-2); position: relative; transition: background 120ms ease-out; }
+.ll-switch__track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--ink-muted); transition: transform 120ms ease-out, background 120ms ease-out; }
+.ll-switch[aria-checked="true"] .ll-switch__track { background: var(--pine); border-color: var(--pine); }
+.ll-switch[aria-checked="true"] .ll-switch__track::after { transform: translateX(16px); background: var(--on-pine); }
+.ll-switch:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--radius-sm); }
+.ll-split { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: var(--space-6); align-items: start; }
+.ll-backdrop { display: none; }
+@media (max-width: 1023px) { .ll-split { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 767px) {
+  .ll-landing { padding: var(--space-4) var(--space-4) var(--space-10); gap: var(--space-8); }
+  .ll-form__row { grid-template-columns: 1fr; }
+  .ll-shell.is-nav-open .ll-backdrop { display: block; position: fixed; inset: 0; z-index: 30; background: var(--backdrop); border: 0; }
 }

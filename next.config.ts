@@ -1,9 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
-  cacheComponents: true,
-  partialPrefetching: true,
+  // Cache Components is off: every signed-in page is a live Convex client view, and Clerk's
+  // components read request data, so prerendering would buy nothing and break the build.
   turbopack: {
     rules: {
       "*.css": {

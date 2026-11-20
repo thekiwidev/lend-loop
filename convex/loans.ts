@@ -1,0 +1,145 @@
+import { ConvexError, v } from "convex/values";
+import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
+import type { Doc, Id } from "./_generated/dataModel";
+import { requireLoanParty, requireUser } from "./lib/access";
+import {
+  alreadyLentError,
+  displayStatus,
+  findOverlap,
+  loanDays,
+  requestDatesError,
+  todayUtc,
+  transitionError,
+  type StoredLoanStatus,
+} from "./lib/loanRules";
+import { recentForLoan, scheduleNotification } from "./automation";
+
+// shortcut: request lists show the latest 100; paginate when people keep longer histories.
+const LIST_LIMIT = 100;
+
+async function approvedLoans(ctx: QueryCtx, toolId: Id<"tools">, exceptId?: Id<"loans">) {
+  const loans = await ctx.db
+    .query("loans")
+    .withIndex("by_tool_status", (q) => q.eq("toolId", toolId).eq("status", "approved"))
+    .collect();
+  return loans.filter((l) => l._id !== exceptId);
+}
+
+export const request = mutation({
+  args: { toolId: v.id("tools"), startDate: v.string(), endDate: v.string() },
+  handler: async (ctx, { toolId, startDate, endDate }) => {
+    const { user } = await requireUser(ctx);
+    const tool = await ctx.db.get(toolId);
+    if (!tool || tool.removedAt !== undefined) throw new ConvexError("That tool is no longer listed.");
+    if (tool.ownerId === user._id) throw new ConvexError("You can't borrow your own tool.");
+
+    const datesError = requestDatesError(startDate, endDate, todayUtc(Date.now()));
+    if (datesError) throw new ConvexError(datesError);
+
+    const mine = await ctx.db
+      .query("loans")
+      .withIndex("by_borrower", (q) => q.eq("borrowerId", user._id))
+      .filter((q) => q.and(q.eq(q.field("toolId"), toolId), q.eq(q.field("status"), "pending")))
+      .first();
+    if (mine) throw new ConvexError("You already have a request waiting for this tool.");
+
+    const clash = findOverlap({ startDate, endDate }, await approvedLoans(ctx, toolId));
+    if (clash) throw new ConvexError(alreadyLentError(tool.name, clash));
+
+    const loanId = await ctx.db.insert("loans", {
+      toolId,
+      ownerId: tool.ownerId,
+      borrowerId: user._id,
+      startDate,
+      endDate,
+      status: "pending",
+    });
+    await scheduleNotification(ctx, loanId, "pending", "owner");
+    return loanId;
+  },
+});
+
+async function move(ctx: MutationCtx, loanId: Id<"loans">, to: StoredLoanStatus) {
+  const { loan, role } = await requireLoanParty(ctx, loanId);
+  const error = transitionError(loan.status, to, role);
+  if (error) throw new ConvexError(error);
+
+  if (to === "approved") {
+    const tool = await ctx.db.get(loan.toolId);
+    if (!tool || tool.removedAt !== undefined) throw new ConvexError("That tool is no longer listed.");
+    const clash = findOverlap(loan, await approvedLoans(ctx, loan.toolId, loan._id));
+    if (clash) throw new ConvexError(alreadyLentError(tool.name, clash));
+  }
+
+  await ctx.db.patch(loanId, to === "returned" ? { status: to, returnedAt: Date.now() } : { status: to });
+  // The person who did not act is the one who hears about it.
+  await scheduleNotification(ctx, loanId, to, role === "owner" ? "borrower" : "owner");
+}
+
+export const approve = mutation({
+  args: { loanId: v.id("loans") },
+  handler: (ctx, { loanId }) => move(ctx, loanId, "approved"),
+});
+
+export const decline = mutation({
+  args: { loanId: v.id("loans") },
+  handler: (ctx, { loanId }) => move(ctx, loanId, "declined"),
+});
+
+export const cancel = mutation({
+  args: { loanId: v.id("loans") },
+  handler: (ctx, { loanId }) => move(ctx, loanId, "cancelled"),
+});
+
+export const markReturned = mutation({
+  args: { loanId: v.id("loans") },
+  handler: (ctx, { loanId }) => move(ctx, loanId, "returned"),
+});
+
+async function toCard(ctx: QueryCtx, loan: Doc<"loans">, otherPartyId: Id<"users">, today: string) {
+  const [tool, other, activity] = await Promise.all([
+    ctx.db.get(loan.toolId),
+    ctx.db.get(otherPartyId),
+    recentForLoan(ctx, loan._id),
+  ]);
+  return {
+    _id: loan._id,
+    tool: { name: tool?.name ?? "Removed tool", category: tool?.category ?? "other", icon: tool?.icon ?? "box" },
+    person: other?.name ?? "A neighbour",
+    status: displayStatus(loan, today),
+    startDate: loan.startDate,
+    endDate: loan.endDate,
+    days: loanDays(loan.startDate, loan.endDate),
+    activity,
+  };
+}
+
+/** Requests the caller has made as a borrower. */
+export const myRequests = query({
+  args: {},
+  handler: async (ctx) => {
+    const { user } = await requireUser(ctx);
+    const today = todayUtc(Date.now());
+    const loans = await ctx.db
+      .query("loans")
+      .withIndex("by_borrower", (q) => q.eq("borrowerId", user._id))
+      .order("desc")
+      .take(LIST_LIMIT);
+    return Promise.all(loans.map((l) => toCard(ctx, l, l.ownerId, today)));
+  },
+});
+
+/** Requests for the caller's tools. */
+export const incoming = query({
+  args: {},
+  handler: async (ctx) => {
+    const { user } = await requireUser(ctx);
+    const today = todayUtc(Date.now());
+    const loans = await ctx.db
+      .query("loans")
+      .withIndex("by_owner", (q) => q.eq("ownerId", user._id))
+      .order("desc")
+      .take(LIST_LIMIT);
+    return Promise.all(loans.map((l) => toCard(ctx, l, l.borrowerId, today)));
+  },
+});

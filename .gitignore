@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+!.env.example
+!.env.n8n.example
+
+# local secrets and n8n data
+/.secrets-local
+/n8n-data
+/.convex
