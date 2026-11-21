@@ -1,11 +1,9 @@
-import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { requireAdmin } from "./lib/access";
 import { displayStatus, isOutToday, todayUtc } from "./lib/loanRules";
-
-// Failed automations are shown as "100+" past this, so the count never scans the whole log.
-const FAILED_COUNT_CAP = 100;
+import { eventCount, loanCount, toolCount, userCount } from "./lib/counts";
+import { pageArgs, pageWindow } from "./lib/pages";
 
 /** Street-wide numbers from active loans only (pending, approved), read through indexes. */
 export const stats = query({
@@ -13,29 +11,36 @@ export const stats = query({
   handler: async (ctx) => {
     await requireAdmin(ctx);
     const today = todayUtc(Date.now());
-    const [approved, pending, failed] = await Promise.all([
+    const [approved, pending, failedAutomations, loans, tools, users] = await Promise.all([
       ctx.db.query("loans").withIndex("by_status", (q) => q.eq("status", "approved")).collect(),
       ctx.db.query("loans").withIndex("by_status", (q) => q.eq("status", "pending")).collect(),
-      ctx.db.query("automationEvents").withIndex("by_status", (q) => q.eq("status", "failed")).take(FAILED_COUNT_CAP),
+      eventCount.count(ctx, { namespace: "failed" }),
+      loanCount.count(ctx),
+      toolCount.count(ctx),
+      userCount.count(ctx),
     ]);
     return {
       onLoan: approved.filter((l) => isOutToday(l, today)).length,
       pending: pending.length,
       overdue: approved.filter((l) => l.endDate < today).length,
-      failedAutomations: failed.length,
-      failedCapped: failed.length === FAILED_COUNT_CAP,
+      failedAutomations,
+      loans,
+      tools,
+      users,
     };
   },
 });
 
 export const loans = query({
-  args: { paginationOpts: paginationOptsValidator },
-  handler: async (ctx, { paginationOpts }) => {
+  args: pageArgs,
+  handler: async (ctx, { page, pageSize }) => {
     await requireAdmin(ctx);
     const today = todayUtc(Date.now());
-    const result = await ctx.db.query("loans").order("desc").paginate(paginationOpts);
-    const page = await Promise.all(
-      result.page.map(async (loan) => {
+    const w = pageWindow(await loanCount.count(ctx), page, pageSize);
+    const top = w.topIndex === null ? null : (await loanCount.at(ctx, w.topIndex)).key;
+    const docs = top === null ? [] : await ctx.db.query("loans").withIndex("by_creation_time", (q) => q.lte("_creationTime", top)).order("desc").take(w.pageSize);
+    const rows = await Promise.all(
+      docs.map(async (loan) => {
         const [tool, owner, borrower, lastEvent] = await Promise.all([
           ctx.db.get(loan.toolId),
           ctx.db.get(loan.ownerId),
@@ -58,17 +63,19 @@ export const loans = query({
         };
       }),
     );
-    return { ...result, page };
+    return { ...w, rows };
   },
 });
 
 export const tools = query({
-  args: { paginationOpts: paginationOptsValidator },
-  handler: async (ctx, { paginationOpts }) => {
+  args: pageArgs,
+  handler: async (ctx, { page, pageSize }) => {
     await requireAdmin(ctx);
-    const result = await ctx.db.query("tools").order("desc").paginate(paginationOpts);
-    const page = await Promise.all(
-      result.page.map(async (tool) => {
+    const w = pageWindow(await toolCount.count(ctx), page, pageSize);
+    const top = w.topIndex === null ? null : (await toolCount.at(ctx, w.topIndex)).key;
+    const docs = top === null ? [] : await ctx.db.query("tools").withIndex("by_creation_time", (q) => q.lte("_creationTime", top)).order("desc").take(w.pageSize);
+    const rows = await Promise.all(
+      docs.map(async (tool) => {
         const owner = await ctx.db.get(tool.ownerId);
         return {
           _id: tool._id,
@@ -79,30 +86,38 @@ export const tools = query({
         };
       }),
     );
-    return { ...result, page };
+    return { ...w, rows };
   },
 });
 
 /** Emails stay server-side even for admins: the table needs names only. */
 export const users = query({
-  args: { paginationOpts: paginationOptsValidator },
-  handler: async (ctx, { paginationOpts }) => {
+  args: pageArgs,
+  handler: async (ctx, { page, pageSize }) => {
     await requireAdmin(ctx);
-    const result = await ctx.db.query("users").order("desc").paginate(paginationOpts);
-    return { ...result, page: result.page.map((u) => ({ _id: u._id, name: u.name, trustedLender: u.trustedLender })) };
+    const w = pageWindow(await userCount.count(ctx), page, pageSize);
+    const top = w.topIndex === null ? null : (await userCount.at(ctx, w.topIndex)).key;
+    const docs = top === null ? [] : await ctx.db.query("users").withIndex("by_creation_time", (q) => q.lte("_creationTime", top)).order("desc").take(w.pageSize);
+    return { ...w, rows: docs.map((u) => ({ _id: u._id, name: u.name, trustedLender: u.trustedLender })) };
   },
 });
 
 export const workflowErrors = query({
-  args: { paginationOpts: paginationOptsValidator },
-  handler: async (ctx, { paginationOpts }) => {
+  args: pageArgs,
+  handler: async (ctx, { page, pageSize }) => {
     await requireAdmin(ctx);
-    const result = await ctx.db
-      .query("automationEvents")
-      .withIndex("by_status", (q) => q.eq("status", "failed"))
-      .order("desc")
-      .paginate(paginationOpts);
-    return { ...result, page: result.page.map((e) => ({ _id: e._id, kind: e.kind, at: e.at, detail: e.detail ?? "" })) };
+    const failed = { namespace: "failed" as const };
+    const w = pageWindow(await eventCount.count(ctx, failed), page, pageSize);
+    const top = w.topIndex === null ? null : (await eventCount.at(ctx, w.topIndex, failed)).key;
+    const docs =
+      top === null
+        ? []
+        : await ctx.db
+            .query("automationEvents")
+            .withIndex("by_status", (q) => q.eq("status", "failed").lte("_creationTime", top))
+            .order("desc")
+            .take(w.pageSize);
+    return { ...w, rows: docs.map((e) => ({ _id: e._id, kind: e.kind, at: e.at, detail: e.detail ?? "" })) };
   },
 });
 

@@ -1,4 +1,5 @@
 import { convexTest } from "convex-test";
+import aggregateTest from "@convex-dev/aggregate/test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
@@ -6,6 +7,13 @@ import schema from "../convex/schema";
 import { verify } from "../convex/lib/signature";
 
 const modules = import.meta.glob("../convex/**/*.ts");
+
+/** A test database with the four count components from convex.config.ts registered. */
+function newTest() {
+  const t = convexTest(schema, modules);
+  for (const name of ["loanCount", "toolCount", "userCount", "eventCount"]) aggregateTest.register(t, name);
+  return t;
+}
 
 const AMAKA = { subject: "user_amaka", name: "Amaka Obi", email: "amaka@example.com" };
 const CHIDI = { subject: "user_chidi", name: "Chidi Okafor", email: "chidi@example.com" };
@@ -22,7 +30,7 @@ const FIRST_PAGE = { numItems: 12, cursor: null };
 const drill = { name: "Cordless drill", category: "power", condition: "good", icon: "drill", description: "18V" } as const;
 
 async function setup() {
-  const t = convexTest(schema, modules);
+  const t = newTest();
   const amaka = t.withIdentity(AMAKA);
   const chidi = t.withIdentity(CHIDI);
   const admin = t.withIdentity(ADMIN);
@@ -132,7 +140,7 @@ describe("admin", () => {
 
   it("lets an admin mark a trusted lender", async () => {
     const { admin, t } = await setup();
-    const { page: users } = await admin.query(api.admin.users, { paginationOpts: FIRST_PAGE });
+    const { rows: users } = await admin.query(api.admin.users, { page: 1, pageSize: 25 });
     const amaka = users.find((u) => u.name === "Amaka Obi")!;
     await admin.mutation(api.admin.setTrustedLender, { userId: amaka._id, trusted: true });
     const row = await t.run((c) => c.db.get(amaka._id));
@@ -243,7 +251,7 @@ describe("users.sync", () => {
       }),
     );
     vi.stubGlobal("fetch", fetchMock);
-    const t = convexTest(schema, modules);
+    const t = newTest();
     await t.withIdentity({ subject: "user_g" }).action(api.users.sync, {});
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("https://api.clerk.com/v1/users/user_g");
@@ -255,7 +263,7 @@ describe("users.sync", () => {
   it("falls back to token claims when Clerk is unreachable", async () => {
     process.env.CLERK_SECRET_KEY = "sk_test_x";
     vi.stubGlobal("fetch", vi.fn(async () => new Response("down", { status: 503 })));
-    const t = convexTest(schema, modules);
+    const t = newTest();
     await t.withIdentity(AMAKA).action(api.users.sync, {});
     const rows = await t.run((c) => c.db.query("users").collect());
     expect(rows).toMatchObject([{ name: "Amaka Obi", email: "amaka@example.com" }]);
@@ -297,7 +305,7 @@ describe("pagination", () => {
 
 describe("seed", () => {
   it("does not duplicate neighbours on a second run, and reset keeps real users", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     await t.withIdentity({ subject: "user_real", name: "Real Person", email: "real@lendloop.test" }).action(api.users.sync, {});
     await t.mutation(internal.seed.run, {});
     expect(await t.mutation(internal.seed.run, {})).toMatch(/Already seeded/);
@@ -307,5 +315,32 @@ describe("seed", () => {
     const left = await t.run(async (c) => ({ users: await c.db.query("users").collect(), tools: await c.db.query("tools").collect() }));
     expect(left.tools).toHaveLength(0);
     expect(left.users.map((u) => u.name)).toEqual(["Real Person"]);
+  });
+});
+
+describe("numbered admin pages", () => {
+  it("counts every row and serves any page, newest first", async () => {
+    const { admin, amaka } = await setup();
+    for (let i = 0; i < 6; i++) await amaka.mutation(api.tools.create, { ...drill, name: `Tool ${i}` });
+    // 7 tools: the drill from setup plus six more.
+    const page1 = await admin.query(api.admin.tools, { page: 1, pageSize: 3 });
+    expect(page1).toMatchObject({ total: 7, pageCount: 3, page: 1, pageSize: 3 });
+    expect(page1.rows.map((r) => r.name)).toEqual(["Tool 5", "Tool 4", "Tool 3"]);
+    const page3 = await admin.query(api.admin.tools, { page: 3, pageSize: 3 });
+    expect(page3.rows.map((r) => r.name)).toEqual(["Cordless drill"]);
+    const beyond = await admin.query(api.admin.tools, { page: 99, pageSize: 3 });
+    expect(beyond.page).toBe(3);
+    const stats = await admin.query(api.admin.stats, {});
+    expect(stats).toMatchObject({ tools: 7, users: 3, loans: 0, failedAutomations: 0 });
+  });
+
+  it("moves an event from failed to sent in the counts", async () => {
+    const { t, admin, chidi, toolId } = await setup();
+    const loanId = await chidi.mutation(api.loans.request, { toolId, startDate: future(1), endDate: future(2) });
+    const event = { idempotencyKey: "k1", loanId, kind: "request_notification" as const };
+    await t.mutation(internal.automation.recordEvent, { ...event, status: "failed" });
+    expect((await admin.query(api.admin.workflowErrors, { page: 1, pageSize: 10 })).total).toBe(1);
+    await t.mutation(internal.automation.recordEvent, { ...event, status: "sent" });
+    expect((await admin.query(api.admin.workflowErrors, { page: 1, pageSize: 10 })).total).toBe(0);
   });
 });

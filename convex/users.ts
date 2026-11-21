@@ -2,6 +2,7 @@ import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import { action, internalMutation, query } from "./_generated/server";
 import { findUserByClerkId, hasAdminRole } from "./lib/access";
+import { insertUser } from "./lib/counts";
 
 const MAX_NAME = 80;
 
@@ -53,7 +54,7 @@ export const upsert = internalMutation({
   handler: async (ctx, { clerkId, name, email }) => {
     const existing = await findUserByClerkId(ctx, clerkId);
     if (!existing) {
-      await ctx.db.insert("users", { clerkId, name, email, trustedLender: false });
+      await insertUser(ctx, { clerkId, name, email, trustedLender: false });
       return;
     }
     if (existing.name !== name || existing.email !== email) {

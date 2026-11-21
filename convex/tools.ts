@@ -7,6 +7,7 @@ import { requireToolOwner, requireUser } from "./lib/access";
 import { isOutToday, todayUtc } from "./lib/loanRules";
 import { isToolIcon } from "../lib/toolIcons";
 import { scheduleNotification } from "./automation";
+import { insertTool } from "./lib/counts";
 
 export const MAX_TOOL_NAME = 80;
 export const MAX_TOOL_DESCRIPTION = 500;
@@ -149,7 +150,7 @@ export const create = mutation({
   args: toolInput,
   handler: async (ctx, args) => {
     const { user } = await requireUser(ctx);
-    return ctx.db.insert("tools", { ...cleanToolInput(args), ownerId: user._id });
+    return insertTool(ctx, { ...cleanToolInput(args), ownerId: user._id });
   },
 });
 

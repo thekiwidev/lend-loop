@@ -12,7 +12,9 @@ import type * as admin from "../admin.js";
 import type * as automation from "../automation.js";
 import type * as http from "../http.js";
 import type * as lib_access from "../lib/access.js";
+import type * as lib_counts from "../lib/counts.js";
 import type * as lib_loanRules from "../lib/loanRules.js";
+import type * as lib_pages from "../lib/pages.js";
 import type * as lib_signature from "../lib/signature.js";
 import type * as loans from "../loans.js";
 import type * as seed from "../seed.js";
@@ -30,7 +32,9 @@ declare const fullApi: ApiFromModules<{
   automation: typeof automation;
   http: typeof http;
   "lib/access": typeof lib_access;
+  "lib/counts": typeof lib_counts;
   "lib/loanRules": typeof lib_loanRules;
+  "lib/pages": typeof lib_pages;
   "lib/signature": typeof lib_signature;
   loans: typeof loans;
   seed: typeof seed;
@@ -64,4 +68,9 @@ export declare const internal: FilterApi<
   FunctionReference<any, "internal">
 >;
 
-export declare const components: {};
+export declare const components: {
+  loanCount: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"loanCount">;
+  toolCount: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"toolCount">;
+  userCount: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"userCount">;
+  eventCount: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"eventCount">;
+};

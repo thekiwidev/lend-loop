@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { internalMutation, type MutationCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { todayUtc } from "./lib/loanRules";
+import { insertLoan, insertTool, insertUser, rebuildCounts } from "./lib/counts";
 
 // Dev-only sample data: `bunx convex run seed:run`. Internal, so no client can call it.
 // Sample neighbours get example.com addresses and are never emailed: seeded rows do not
@@ -41,7 +42,7 @@ async function upsertNeighbour(ctx: MutationCtx, n: (typeof NEIGHBOURS)[number])
     .unique();
   if (existing) return existing._id;
   const email = `${n.clerkId.replace("seed_", "")}@example.com`;
-  return ctx.db.insert("users", { ...n, email });
+  return insertUser(ctx, { ...n, email });
 }
 
 export const run = internalMutation({
@@ -56,12 +57,12 @@ export const run = internalMutation({
 
     const toolIds: Id<"tools">[] = [];
     for (const { owner, tool } of TOOLS) {
-      toolIds.push(await ctx.db.insert("tools", { ...tool, ownerId: ids.get(owner)! }));
+      toolIds.push(await insertTool(ctx, { ...tool, ownerId: ids.get(owner)! }));
     }
 
     const today = todayUtc(Date.now());
     // The hedge trimmer is out with Zainab until in four days.
-    await ctx.db.insert("loans", {
+    await insertLoan(ctx, {
       toolId: toolIds[1],
       ownerId: ids.get("seed_tunde")!,
       borrowerId: ids.get("seed_zainab")!,
@@ -76,7 +77,7 @@ export const run = internalMutation({
     }
 
     // Overdue: the real user borrowed the pressure washer and it was due back three days ago.
-    await ctx.db.insert("loans", {
+    await insertLoan(ctx, {
       toolId: toolIds[4],
       ownerId: ids.get("seed_ifeoma")!,
       borrowerId: realUser._id,
@@ -86,7 +87,7 @@ export const run = internalMutation({
     });
 
     // Incoming: Chidi wants to borrow a tool the real user lists.
-    const ownTool = await ctx.db.insert("tools", {
+    const ownTool = await insertTool(ctx, {
       ownerId: realUser._id,
       name: "Circular saw",
       category: "power",
@@ -94,7 +95,7 @@ export const run = internalMutation({
       icon: "saw",
       description: "Makita 165mm, spare blade in the case.",
     });
-    await ctx.db.insert("loans", {
+    await insertLoan(ctx, {
       toolId: ownTool,
       ownerId: realUser._id,
       borrowerId: ids.get("seed_chidi")!,
@@ -139,6 +140,16 @@ export const reset = internalMutation({
         neighbours++;
       }
     }
+    await rebuildCounts(ctx);
     return `Cleared tools, loans, automation events and ${neighbours} sample neighbours.`;
+  },
+});
+
+/** Rebuilds the admin page counts from the tables. Run once after upgrading: `bunx convex run seed:rebuildAdminCounts`. */
+export const rebuildAdminCounts = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    await rebuildCounts(ctx);
+    return "Counts rebuilt.";
   },
 });

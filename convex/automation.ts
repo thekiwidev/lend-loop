@@ -11,6 +11,7 @@ import {
 import { automationKindValidator, automationStatusValidator, loanStatusValidator } from "./schema";
 import { todayUtc, type StoredLoanStatus } from "./lib/loanRules";
 import { signedHeaders } from "./lib/signature";
+import { insertEvent, patchEvent } from "./lib/counts";
 
 /** Waits between attempts after a failed hand-off to n8n: 1, 5 and 15 minutes. */
 export const RETRY_DELAYS_MS = [60_000, 300_000, 900_000] as const;
@@ -151,11 +152,11 @@ export const recordEvent = internalMutation({
       .unique();
     if (existing) {
       if (existing.status === "failed" && args.status === "sent") {
-        await ctx.db.patch(existing._id, { status: "sent", at: Date.now(), detail });
+        await patchEvent(ctx, existing._id, { status: "sent", at: Date.now(), detail });
       }
       return { ok: true as const, id: existing._id };
     }
-    const id = await ctx.db.insert("automationEvents", {
+    const id = await insertEvent(ctx, {
       idempotencyKey: args.idempotencyKey,
       loanId: loanId ?? undefined,
       kind: args.kind,

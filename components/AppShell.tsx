@@ -20,6 +20,7 @@ export function useNavDrawer() {
 }
 
 function activeId(pathname: string): string {
+  if (pathname.startsWith("/admin/")) return `admin-${pathname.split("/")[2]}`;
   if (pathname.startsWith("/admin")) return "admin";
   if (pathname.startsWith("/app/listings")) return "listings";
   if (pathname.startsWith("/app/incoming")) return "incoming";
@@ -57,10 +58,18 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const items: NavItem[] = [
     { id: "tools", label: "All tools", icon: "grid", href: "/app", section: "Browse" },
-    { id: "listings", label: "My listings", icon: "wrench", href: "/app/listings", section: "Lending", count: me?.counts.listings },
+    { id: "admin-listings", label: "My listings", icon: "wrench", href: "/app/listings", section: "Lending", count: me?.counts.listings },
     { id: "incoming", label: "Incoming requests", icon: "inbox", href: "/app/incoming", section: "Lending", count: me?.counts.incomingPending, urgent: true },
     { id: "requests", label: "My requests", icon: "send", href: "/app/requests", section: "Borrowing", count: me?.counts.myPending },
-    ...(me?.isAdmin ? [{ id: "admin", label: "Admin", icon: "admin", href: "/admin", section: "Neighbourhood" }] : []),
+    ...(me?.isAdmin
+      ? [
+          { id: "admin", label: "Overview", icon: "admin", href: "/admin", section: "Admin" },
+          { id: "admin-loans", label: "All loans", icon: "loop", href: "/admin/loans", section: "Admin" },
+          { id: "admin-listings", label: "All listings", icon: "list", href: "/admin/listings", section: "Admin" },
+          { id: "admin-neighbours", label: "Neighbours", icon: "users", href: "/admin/neighbours", section: "Admin" },
+          { id: "admin-automations", label: "Failed automations", icon: "alert", href: "/admin/automations", section: "Admin" },
+        ]
+      : []),
   ];
   const role = [me?.isAdmin ? "Admin" : null, me?.trustedLender ? "Trusted lender" : null].filter(Boolean).join(" · ");
 

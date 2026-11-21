@@ -116,3 +116,23 @@
 .ll-dates__title { color: var(--ink-muted); }
 .ll-dates__value { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-display); font-size: 16px; font-weight: 650; }
 .ll-cal__day.is-selected { box-shadow: inset 0 0 0 2px var(--ink); }
+
+/* Numbered pagination under admin tables. */
+.ll-pager { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-3) var(--space-5); }
+.ll-pager__summary { margin: 0; color: var(--ink-muted); }
+.ll-pager__size, .ll-pager__jump { display: flex; align-items: center; gap: var(--space-2); }
+.ll-pager__size label, .ll-pager__jump label { color: var(--ink-muted); white-space: nowrap; }
+.ll-pager__select { width: auto; height: 32px; padding-right: var(--space-2); appearance: auto; -webkit-appearance: menulist; }
+.ll-pager__input { width: 84px; height: 32px; }
+.ll-pager__pages { display: flex; align-items: center; gap: 2px; }
+.ll-pager__prev .ll-icon { transform: rotate(180deg); }
+.ll-pager__num { min-width: 32px; height: 32px; padding: 0 var(--space-2); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--ink); font: inherit; font-size: 13px; font-variant-numeric: tabular-nums; cursor: pointer; }
+.ll-pager__num:hover:not(.is-on) { background: var(--surface-2); }
+.ll-pager__num:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ll-pager__num.is-on { background: var(--pine); color: var(--on-pine); font-weight: 700; }
+.ll-pager__gap { min-width: 20px; text-align: center; color: var(--ink-subtle); }
+.ll-admin-links { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--space-4); }
+.ll-admin-link { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-4); border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface-1); color: var(--ink); text-decoration: none; box-shadow: var(--shadow-sm); transition: box-shadow 160ms ease-out, transform 160ms ease-out; }
+.ll-admin-link:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+.ll-admin-link__top { display: flex; align-items: center; justify-content: space-between; color: var(--ink-muted); }
+.ll-admin-link__count { font-family: var(--font-display); font-size: 28px; line-height: 32px; font-weight: 700; }

@@ -15,6 +15,7 @@ import {
   type StoredLoanStatus,
 } from "./lib/loanRules";
 import { recentForLoan, scheduleNotification } from "./automation";
+import { insertLoan } from "./lib/counts";
 
 const requestFilter = v.union(v.literal("all"), v.literal("pending"), v.literal("active"), v.literal("closed"));
 type RequestFilter = "all" | "pending" | "active" | "closed";
@@ -48,7 +49,7 @@ export const request = mutation({
     const clash = findOverlap({ startDate, endDate }, await approvedLoans(ctx, toolId));
     if (clash) throw new ConvexError(alreadyLentError(tool.name, clash));
 
-    const loanId = await ctx.db.insert("loans", {
+    const loanId = await insertLoan(ctx, {
       toolId,
       ownerId: tool.ownerId,
       borrowerId: user._id,
