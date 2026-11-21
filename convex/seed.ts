@@ -5,8 +5,8 @@ import { todayUtc } from "./lib/loanRules";
 import { insertLoan, insertTool, insertUser, rebuildCounts } from "./lib/counts";
 
 // Dev-only sample data: `bunx convex run seed:run`. Internal, so no client can call it.
-// Sample neighbours get example.com addresses and are never emailed: seeded rows do not
-// schedule notifications, and the only overdue loan seeded is borrowed by a real user.
+// Sample neighbours get example.com addresses and noEmail, so they are never emailed: their
+// notifications are recorded as sent without reaching n8n, and reminders skip them.
 
 const NEIGHBOURS = [
   { clerkId: "seed_amaka", name: "Amaka Obi", trustedLender: true },
@@ -42,7 +42,7 @@ async function upsertNeighbour(ctx: MutationCtx, n: (typeof NEIGHBOURS)[number])
     .unique();
   if (existing) return existing._id;
   const email = `${n.clerkId.replace("seed_", "")}@example.com`;
-  return insertUser(ctx, { ...n, email });
+  return insertUser(ctx, { ...n, email, noEmail: true });
 }
 
 export const run = internalMutation({

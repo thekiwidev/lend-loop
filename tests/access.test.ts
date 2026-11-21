@@ -5,6 +5,7 @@ import { api, internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
 import { verify } from "../convex/lib/signature";
+import { SIMULATED_DETAIL, skipsEmail } from "../convex/automation";
 
 const modules = import.meta.glob("../convex/**/*.ts");
 
@@ -15,9 +16,9 @@ function newTest() {
   return t;
 }
 
-const AMAKA = { subject: "user_amaka", name: "Amaka Obi", email: "amaka@example.com" };
-const CHIDI = { subject: "user_chidi", name: "Chidi Okafor", email: "chidi@example.com" };
-const ADMIN = { subject: "user_admin", name: "Ada Admin", email: "ada@example.com", role: "admin" };
+const AMAKA = { subject: "user_amaka", name: "Amaka Obi", email: "amaka@lendloop.test" };
+const CHIDI = { subject: "user_chidi", name: "Chidi Okafor", email: "chidi@lendloop.test" };
+const ADMIN = { subject: "user_admin", name: "Ada Admin", email: "ada@lendloop.test", role: "admin" };
 
 function future(days: number): string {
   const d = new Date();
@@ -232,7 +233,7 @@ describe("sendRequestNotification", () => {
     });
     expect(check).toEqual({ ok: true });
     const payload = JSON.parse(body);
-    expect(payload).toMatchObject({ status: "pending", recipientEmail: "amaka@example.com" });
+    expect(payload).toMatchObject({ status: "pending", recipientEmail: "amaka@lendloop.test" });
     expect(payload.email.subject).toMatch(/^Chidi Okafor wants to borrow your /);
     expect(Object.keys(payload).sort()).toEqual(["email", "eventId", "loanId", "recipientEmail", "status"]);
     expect(Object.keys(payload.email).sort()).toEqual(["html", "subject", "text"]);
@@ -253,6 +254,35 @@ describe("sendRequestNotification", () => {
     const rows = await t.run((c) => c.db.query("automationEvents").collect());
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ status: "failed", kind: "request_notification", detail: "n8n answered 503" });
+  });
+
+  it("records sample neighbours' notifications as sent without calling n8n", async () => {
+    vi.useFakeTimers();
+    process.env.N8N_REQUEST_WEBHOOK_URL = "http://n8n.test/webhook/lendloop-request";
+    process.env.LENDLOOP_N8N_SECRET = "s3cret";
+    const fetchMock = vi.fn(async () => new Response("ok", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { t, chidi, toolId } = await setup();
+    await t.run(async (c) => {
+      const owner = (await c.db.query("users").collect()).find((u) => u.name === "Amaka Obi")!;
+      await c.db.patch(owner._id, { noEmail: true });
+    });
+    await chidi.mutation(api.loans.request, { toolId, startDate: future(1), endDate: future(2) });
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    const rows = await t.run((c) => c.db.query("automationEvents").collect());
+    expect(rows).toMatchObject([{ status: "sent", kind: "request_notification", detail: SIMULATED_DETAIL }]);
+  });
+});
+
+describe("skipsEmail", () => {
+  it("skips flagged users and example.com addresses, nobody else", () => {
+    expect(skipsEmail({ noEmail: true, email: "real@gmail.com" })).toBe(true);
+    expect(skipsEmail({ email: "amaka@Example.com" })).toBe(true);
+    expect(skipsEmail({ email: "real@gmail.com" })).toBe(false);
+    expect(skipsEmail({ noEmail: false, email: "real@gmail.com" })).toBe(false);
   });
 });
 
@@ -291,7 +321,7 @@ describe("users.sync", () => {
     const t = newTest();
     await t.withIdentity(AMAKA).action(api.users.sync, {});
     const rows = await t.run((c) => c.db.query("users").collect());
-    expect(rows).toMatchObject([{ name: "Amaka Obi", email: "amaka@example.com" }]);
+    expect(rows).toMatchObject([{ name: "Amaka Obi", email: "amaka@lendloop.test" }]);
   });
 });
 

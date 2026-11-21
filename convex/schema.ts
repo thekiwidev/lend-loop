@@ -41,6 +41,8 @@ export default defineSchema({
     trustedLender: v.boolean(),
     // Optional so rows created before it existed stay valid; missing means false.
     trustedBorrower: v.optional(v.boolean()),
+    // Sample neighbours: notifications are recorded as sent but never emailed.
+    noEmail: v.optional(v.boolean()),
   }).index("by_clerkId", ["clerkId"]),
 
   tools: defineTable({

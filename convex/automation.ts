@@ -14,6 +14,13 @@ import { signedHeaders } from "./lib/signature";
 import { overdueEmail, requestEmail } from "./lib/emails";
 
 const appUrl = () => process.env.APP_URL ?? "http://localhost:3000";
+
+/** Sample neighbours never get real email. example.com never delivers, and bounces hurt the sending domain. */
+export function skipsEmail(user: { noEmail?: boolean; email: string }): boolean {
+  return user.noEmail === true || user.email.toLowerCase().endsWith("@example.com");
+}
+
+export const SIMULATED_DETAIL = "Sample neighbour: recorded, not emailed";
 import { insertEvent, patchEvent } from "./lib/counts";
 
 /** Waits between attempts after a failed hand-off to n8n: 1, 5 and 15 minutes. */
@@ -63,6 +70,7 @@ export const notificationPayload = internalQuery({
     const to = recipient === "owner" ? owner : borrower;
     const other = recipient === "owner" ? borrower : owner;
     return {
+      skipEmail: skipsEmail(to),
       eventId: `loan:${loanId}:${status}`,
       loanId,
       status,
@@ -90,8 +98,19 @@ export const sendRequestNotification = internalAction({
   },
   handler: async (ctx, args) => {
     const { loanId, status, recipient } = args;
-    const payload = await ctx.runQuery(internal.automation.notificationPayload, { loanId, status, recipient });
-    if (!payload) return;
+    const found = await ctx.runQuery(internal.automation.notificationPayload, { loanId, status, recipient });
+    if (!found) return;
+    const { skipEmail, ...payload } = found;
+    if (skipEmail) {
+      await ctx.runMutation(internal.automation.recordEvent, {
+        idempotencyKey: payload.eventId,
+        loanId,
+        kind: "request_notification",
+        status: "sent",
+        detail: SIMULATED_DETAIL,
+      });
+      return;
+    }
 
     const url = process.env.N8N_REQUEST_WEBHOOK_URL;
     const secret = process.env.LENDLOOP_N8N_SECRET;
@@ -193,7 +212,8 @@ export const overdueLoans = internalQuery({
           .unique();
         if (done?.status === "sent") return null;
         const [tool, borrower] = await Promise.all([ctx.db.get(loan.toolId), ctx.db.get(loan.borrowerId)]);
-        if (!tool || !borrower) return null;
+        // shortcut: sample borrowers are left out of reminders entirely, so no event is recorded for them.
+        if (!tool || !borrower || skipsEmail(borrower)) return null;
         return {
           loanId: loan._id,
           idempotencyKey,
