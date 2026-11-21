@@ -1,6 +1,6 @@
 "use client";
 
-import { useAuth, useClerk } from "@clerk/nextjs";
+import { useAuth, useClerk, useUser } from "@clerk/nextjs";
 import { useAction, useConvexAuth, useQuery } from "convex/react";
 import { usePathname } from "next/navigation";
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
@@ -35,6 +35,8 @@ function activeId(pathname: string): string {
 export function AppShell({ children }: { children: ReactNode }) {
   const { isSignedIn } = useAuth();
   const clerk = useClerk();
+  // Clerk's own profile, so the account menu (and Sign out) works even when Convex is down.
+  const { user: clerkUser } = useUser();
   const { isAuthenticated, isLoading } = useConvexAuth();
   const sync = useAction(api.users.sync);
   const [synced, setSynced] = useState(false);
@@ -88,7 +90,13 @@ export function AppShell({ children }: { children: ReactNode }) {
           items={items}
           active={activeId(pathname)}
           onNavigate={() => setDrawerOpen(false)}
-          user={me ? { name: me.name, email: me.email, role: role || "Neighbour", trusted: me.trustedLender } : undefined}
+          user={
+            me
+              ? { name: me.name, email: me.email, role: role || "Neighbour", trusted: me.trustedLender }
+              : clerkUser
+                ? { name: clerkUser.fullName ?? "Your account", email: clerkUser.primaryEmailAddress?.emailAddress, role: "Neighbour" }
+                : undefined
+          }
           userActions={[
             { label: "Manage account", icon: "users", onClick: () => clerk.openUserProfile() },
             { label: "Sign out", icon: "logout", onClick: () => clerk.signOut({ redirectUrl: "/" }) },
