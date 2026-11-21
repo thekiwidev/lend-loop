@@ -13,6 +13,7 @@ import type * as automation from "../automation.js";
 import type * as http from "../http.js";
 import type * as lib_access from "../lib/access.js";
 import type * as lib_counts from "../lib/counts.js";
+import type * as lib_emails from "../lib/emails.js";
 import type * as lib_loanRules from "../lib/loanRules.js";
 import type * as lib_pages from "../lib/pages.js";
 import type * as lib_signature from "../lib/signature.js";
@@ -33,6 +34,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   "lib/access": typeof lib_access;
   "lib/counts": typeof lib_counts;
+  "lib/emails": typeof lib_emails;
   "lib/loanRules": typeof lib_loanRules;
   "lib/pages": typeof lib_pages;
   "lib/signature": typeof lib_signature;

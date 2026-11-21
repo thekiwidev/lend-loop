@@ -207,10 +207,10 @@ describe("sendRequestNotification", () => {
     });
     expect(check).toEqual({ ok: true });
     const payload = JSON.parse(body);
-    expect(payload).toMatchObject({ status: "pending", recipientRole: "owner", recipientEmail: "amaka@example.com", otherPartyName: "Chidi Okafor" });
-    expect(Object.keys(payload).sort()).toEqual(
-      ["appUrl", "endDate", "eventId", "loanId", "otherPartyName", "recipientEmail", "recipientName", "recipientRole", "startDate", "status", "toolName"].sort(),
-    );
+    expect(payload).toMatchObject({ status: "pending", recipientEmail: "amaka@example.com" });
+    expect(payload.email.subject).toMatch(/^Chidi Okafor wants to borrow your /);
+    expect(Object.keys(payload).sort()).toEqual(["email", "eventId", "loanId", "recipientEmail", "status"]);
+    expect(Object.keys(payload.email).sort()).toEqual(["html", "subject", "text"]);
   });
 
   it("retries three times, then records one failed event", async () => {

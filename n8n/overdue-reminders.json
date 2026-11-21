@@ -142,7 +142,7 @@
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
-        "body": "={{ JSON.stringify({ from: $env.EMAIL_FROM, to: [$('Split loans').item.json.borrowerEmail], subject: 'Reminder: the ' + $('Split loans').item.json.toolName.toLowerCase() + ' is overdue', text: 'Hi ' + $('Split loans').item.json.borrowerName.split(' ')[0] + ',\\n\\nThe ' + $('Split loans').item.json.toolName.toLowerCase() + ' was due back on ' + $('Split loans').item.json.endDate + '. Please return it, or message the owner if you need longer.\\n\\nLendLoop, your street\\'s shared shed.' }) }}",
+        "body": "={{ JSON.stringify({ from: $env.EMAIL_FROM, to: [$('Split loans').item.json.borrowerEmail], subject: $('Split loans').item.json.email.subject, text: $('Split loans').item.json.email.text, html: $('Split loans').item.json.email.html }) }}",
         "options": {
           "timeout": 10000
         }

@@ -11,6 +11,9 @@ import {
 import { automationKindValidator, automationStatusValidator, loanStatusValidator } from "./schema";
 import { todayUtc, type StoredLoanStatus } from "./lib/loanRules";
 import { signedHeaders } from "./lib/signature";
+import { overdueEmail, requestEmail } from "./lib/emails";
+
+const appUrl = () => process.env.APP_URL ?? "http://localhost:3000";
 import { insertEvent, patchEvent } from "./lib/counts";
 
 /** Waits between attempts after a failed hand-off to n8n: 1, 5 and 15 minutes. */
@@ -63,14 +66,17 @@ export const notificationPayload = internalQuery({
       eventId: `loan:${loanId}:${status}`,
       loanId,
       status,
-      recipientRole: recipient,
       recipientEmail: to.email,
-      recipientName: to.name,
-      otherPartyName: other.name,
-      toolName: tool.name,
-      startDate: loan.startDate,
-      endDate: loan.endDate,
-      appUrl: process.env.APP_URL ?? "http://localhost:3000",
+      email: requestEmail({
+        status,
+        recipientRole: recipient,
+        recipientName: to.name,
+        otherPartyName: other.name,
+        toolName: tool.name,
+        startDate: loan.startDate,
+        endDate: loan.endDate,
+        appUrl: appUrl(),
+      }),
     };
   },
 });
@@ -192,9 +198,7 @@ export const overdueLoans = internalQuery({
           loanId: loan._id,
           idempotencyKey,
           borrowerEmail: borrower.email,
-          borrowerName: borrower.name,
-          toolName: tool.name,
-          endDate: loan.endDate,
+          email: overdueEmail({ borrowerName: borrower.name, toolName: tool.name, endDate: loan.endDate, appUrl: appUrl() }),
         };
       }),
     );
