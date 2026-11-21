@@ -24,9 +24,9 @@ async function setup() {
   const amaka = t.withIdentity(AMAKA);
   const chidi = t.withIdentity(CHIDI);
   const admin = t.withIdentity(ADMIN);
-  await amaka.mutation(api.users.sync, {});
-  await chidi.mutation(api.users.sync, {});
-  await admin.mutation(api.users.sync, {});
+  await amaka.action(api.users.sync, {});
+  await chidi.action(api.users.sync, {});
+  await admin.action(api.users.sync, {});
   const toolId = await amaka.mutation(api.tools.create, drill);
   return { t, amaka, chidi, admin, toolId };
 }
@@ -106,7 +106,7 @@ describe("loans", () => {
   it("refuses to approve a loan that overlaps an approved one", async () => {
     const other = { subject: "user_zainab", name: "Zainab Yusuf", email: "z@example.com" };
     const zainab = ctx.t.withIdentity(other);
-    await zainab.mutation(api.users.sync, {});
+    await zainab.action(api.users.sync, {});
     const first = await ctx.chidi.mutation(api.loans.request, { toolId: ctx.toolId, startDate: future(1), endDate: future(3) });
     const second = await zainab.mutation(api.loans.request, { toolId: ctx.toolId, startDate: future(3), endDate: future(4) });
     await ctx.amaka.mutation(api.loans.approve, { loanId: first });
@@ -218,5 +218,44 @@ describe("sendRequestNotification", () => {
     const rows = await t.run((c) => c.db.query("automationEvents").collect());
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ status: "failed", kind: "request_notification", detail: "n8n answered 503" });
+  });
+});
+
+describe("users.sync", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    delete process.env.CLERK_SECRET_KEY;
+  });
+
+  it("takes name and email from Clerk's API, not the token", async () => {
+    process.env.CLERK_SECRET_KEY = "sk_test_x";
+    const fetchMock = vi.fn(async () =>
+      Response.json({
+        first_name: "Gabriel",
+        last_name: "Adedotun",
+        primary_email_address_id: "e2",
+        email_addresses: [
+          { id: "e1", email_address: "old@example.com" },
+          { id: "e2", email_address: "gabriel@example.com" },
+        ],
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const t = convexTest(schema, modules);
+    await t.withIdentity({ subject: "user_g" }).action(api.users.sync, {});
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("https://api.clerk.com/v1/users/user_g");
+    expect((init.headers as Record<string, string>).Authorization).toBe("Bearer sk_test_x");
+    const rows = await t.run((c) => c.db.query("users").collect());
+    expect(rows).toMatchObject([{ clerkId: "user_g", name: "Gabriel Adedotun", email: "gabriel@example.com" }]);
+  });
+
+  it("falls back to token claims when Clerk is unreachable", async () => {
+    process.env.CLERK_SECRET_KEY = "sk_test_x";
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("down", { status: 503 })));
+    const t = convexTest(schema, modules);
+    await t.withIdentity(AMAKA).action(api.users.sync, {});
+    const rows = await t.run((c) => c.db.query("users").collect());
+    expect(rows).toMatchObject([{ name: "Amaka Obi", email: "amaka@example.com" }]);
   });
 });

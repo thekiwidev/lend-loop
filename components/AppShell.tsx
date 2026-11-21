@@ -1,7 +1,7 @@
 "use client";
 
 import { useAuth, useClerk } from "@clerk/nextjs";
-import { useConvexAuth, useMutation, useQuery } from "convex/react";
+import { useAction, useConvexAuth, useQuery } from "convex/react";
 import { usePathname } from "next/navigation";
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { api } from "@/convex/_generated/api";
@@ -36,7 +36,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { isSignedIn } = useAuth();
   const clerk = useClerk();
   const { isAuthenticated, isLoading } = useConvexAuth();
-  const sync = useMutation(api.users.sync);
+  const sync = useAction(api.users.sync);
   const [synced, setSynced] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);

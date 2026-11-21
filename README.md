@@ -97,7 +97,10 @@ bunx convex env set CLERK_JWT_ISSUER_DOMAIN https://<your-app>.clerk.accounts.de
 bunx convex env set LENDLOOP_N8N_SECRET <the secret>
 bunx convex env set N8N_REQUEST_WEBHOOK_URL http://localhost:5678/webhook/lendloop-request
 bunx convex env set APP_URL http://localhost:3000
+bunx convex env set CLERK_SECRET_KEY <the sk_test_ key from .env.local>
 ```
+
+`users.sync` uses the Clerk secret key to read your name and email from Clerk's Backend API, so they do not depend on which claims the JWT template carries.
 
 ### 4. Next.js
 
@@ -174,7 +177,7 @@ bun run build
 - **Resend without a verified domain** only delivers to the Resend account's own address from `onboarding@resend.dev`.
 - **The n8n side compares signatures with an IF node**, which is not constant-time, and re-serialises the parsed JSON body to verify it. That equals the raw bytes for Convex's `JSON.stringify` payloads; a different sender would need a raw-body check.
 - **Lists are capped** (300 tools, 100 requests per person, 500 rows in admin tables) rather than paginated.
-- **The user row is created on first visit** to `/app` (`users.sync`), not by a Clerk webhook.
+- **The user row is created and refreshed on each visit** to `/app` (`users.sync` reads the profile from Clerk's API), not by a Clerk webhook.
 
 See [PRODUCTION.md](PRODUCTION.md) for what changes before real users.
 
