@@ -109,6 +109,7 @@ async function toCard(ctx: QueryCtx, loan: Doc<"loans">, otherPartyId: Id<"users
     _id: loan._id,
     tool: { name: tool?.name ?? "Removed tool", category: tool?.category ?? "other", icon: tool?.icon ?? "box" },
     person: other?.name ?? "A neighbour",
+    personTrustedBorrower: other?.trustedBorrower ?? false,
     status: displayStatus(loan, today),
     startDate: loan.startDate,
     endDate: loan.endDate,

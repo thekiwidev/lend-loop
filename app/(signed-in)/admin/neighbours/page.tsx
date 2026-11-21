@@ -4,7 +4,9 @@ import { useMutation, useQuery } from "convex/react";
 import { useState } from "react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { ActionMenu } from "@/components/ActionMenu";
 import { Avatar } from "@/components/Avatar";
+import { Badge } from "@/components/Badge";
 import { Banner } from "@/components/Banner";
 import { PagedTable } from "@/components/PagedTable";
 import { TopBar } from "@/components/TopBar";
@@ -14,13 +16,13 @@ import { useLastLoaded, usePages } from "@/lib/usePages";
 export default function AdminNeighboursPage() {
   const pages = usePages();
   const data = useLastLoaded(useQuery(api.admin.users, { page: pages.page, pageSize: pages.pageSize }));
-  const setTrusted = useMutation(api.admin.setTrustedLender);
+  const setTrust = useMutation(api.admin.setTrust);
   const [error, setError] = useState<string | null>(null);
 
-  async function toggleTrusted(userId: Id<"users">, trusted: boolean) {
+  async function updateTrust(userId: Id<"users">, change: { lender?: boolean; borrower?: boolean }) {
     setError(null);
     try {
-      await setTrusted({ userId, trusted });
+      await setTrust({ userId, ...change });
     } catch (err) {
       setError(errorMessage(err));
     }
@@ -28,7 +30,7 @@ export default function AdminNeighboursPage() {
 
   return (
     <>
-      <TopBar title="Neighbours" subtitle="Everyone who has signed in, and who is a trusted lender" />
+      <TopBar title="Neighbours" subtitle="Everyone who has signed in, and who is trusted to lend or borrow" />
       <main className="ll-content">
         {error ? <Banner tone="danger" onDismiss={() => setError(null)}>{error}</Banner> : null}
         <PagedTable
@@ -51,14 +53,30 @@ export default function AdminNeighboursPage() {
               ),
             },
             {
-              key: "trustedLender",
-              header: "Trusted lender",
+              key: "trust",
+              header: "Trust",
+              render: (r) =>
+                r.trustedLender || r.trustedBorrower ? (
+                  <span style={{ display: "inline-flex", flexWrap: "wrap", gap: 6 }}>
+                    {r.trustedLender ? <Badge tone="brass" icon="shield">Trusted lender</Badge> : null}
+                    {r.trustedBorrower ? <Badge tone="pine" icon="check">Trusted borrower</Badge> : null}
+                  </span>
+                ) : (
+                  <span className="caption" style={{ color: "var(--ink-muted)" }}>Not yet</span>
+                ),
+            },
+            {
+              key: "actions",
+              header: <span className="ll-sr">Actions</span>,
               align: "right",
               render: (r) => (
-                <button type="button" role="switch" aria-checked={r.trustedLender} aria-label={`Trusted lender: ${r.name}`} className="ll-switch" onClick={() => toggleTrusted(r._id, !r.trustedLender)}>
-                  <span className="ll-switch__track" />
-                  {r.trustedLender ? "Trusted" : "Not yet"}
-                </button>
+                <ActionMenu
+                  label={`Trust options for ${r.name}`}
+                  items={[
+                    { label: "Trusted lender", checked: r.trustedLender, onToggle: () => updateTrust(r._id, { lender: !r.trustedLender }) },
+                    { label: "Trusted borrower", checked: r.trustedBorrower, onToggle: () => updateTrust(r._id, { borrower: !r.trustedBorrower }) },
+                  ]}
+                />
               ),
             },
           ]}

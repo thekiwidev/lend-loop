@@ -86,6 +86,7 @@ export const me = query({
       // The caller's own address only; other people's emails never reach the client.
       email: user.email,
       trustedLender: user.trustedLender,
+      trustedBorrower: user.trustedBorrower ?? false,
       isAdmin: hasAdminRole(identity),
       counts: {
         listings: myTools.length,

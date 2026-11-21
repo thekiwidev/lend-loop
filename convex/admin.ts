@@ -98,7 +98,7 @@ export const users = query({
     const w = pageWindow(await userCount.count(ctx), page, pageSize);
     const top = w.topIndex === null ? null : (await userCount.at(ctx, w.topIndex)).key;
     const docs = top === null ? [] : await ctx.db.query("users").withIndex("by_creation_time", (q) => q.lte("_creationTime", top)).order("desc").take(w.pageSize);
-    return { ...w, rows: docs.map((u) => ({ _id: u._id, name: u.name, trustedLender: u.trustedLender })) };
+    return { ...w, rows: docs.map((u) => ({ _id: u._id, name: u.name, trustedLender: u.trustedLender, trustedBorrower: u.trustedBorrower ?? false })) };
   },
 });
 
@@ -121,12 +121,16 @@ export const workflowErrors = query({
   },
 });
 
-export const setTrustedLender = mutation({
-  args: { userId: v.id("users"), trusted: v.boolean() },
-  handler: async (ctx, { userId, trusted }) => {
+/** Sets either trust mark, or both; a mark left out keeps its current value. */
+export const setTrust = mutation({
+  args: { userId: v.id("users"), lender: v.optional(v.boolean()), borrower: v.optional(v.boolean()) },
+  handler: async (ctx, { userId, lender, borrower }) => {
     await requireAdmin(ctx);
     const user = await ctx.db.get(userId);
     if (!user) return;
-    await ctx.db.patch(userId, { trustedLender: trusted });
+    await ctx.db.patch(userId, {
+      ...(lender === undefined ? {} : { trustedLender: lender }),
+      ...(borrower === undefined ? {} : { trustedBorrower: borrower }),
+    });
   },
 });

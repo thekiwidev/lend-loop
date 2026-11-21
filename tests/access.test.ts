@@ -135,17 +135,42 @@ describe("admin", () => {
     const { chidi } = await setup();
     await expect(chidi.query(api.admin.stats, {})).rejects.toThrow("Only neighbourhood admins");
     const users = await setup();
-    await expect(users.amaka.mutation(api.admin.setTrustedLender, { userId: "x" as Id<"users">, trusted: true })).rejects.toThrow();
+    await expect(users.amaka.mutation(api.admin.setTrust, { userId: "x" as Id<"users">, lender: true })).rejects.toThrow();
   });
 
   it("lets an admin mark a trusted lender", async () => {
     const { admin, t } = await setup();
     const { rows: users } = await admin.query(api.admin.users, { page: 1, pageSize: 25 });
     const amaka = users.find((u) => u.name === "Amaka Obi")!;
-    await admin.mutation(api.admin.setTrustedLender, { userId: amaka._id, trusted: true });
+    await admin.mutation(api.admin.setTrust, { userId: amaka._id, lender: true });
     const row = await t.run((c) => c.db.get(amaka._id));
     expect(row?.trustedLender).toBe(true);
+    expect(row?.trustedBorrower).toBeUndefined();
     expect(users[0]).not.toHaveProperty("email");
+  });
+
+  it("sets trusted borrower and lender independently, and both together", async () => {
+    const { admin, t } = await setup();
+    const { rows: users } = await admin.query(api.admin.users, { page: 1, pageSize: 25 });
+    const amaka = users.find((u) => u.name === "Amaka Obi")!;
+    expect(amaka.trustedBorrower).toBe(false);
+    await admin.mutation(api.admin.setTrust, { userId: amaka._id, borrower: true });
+    await admin.mutation(api.admin.setTrust, { userId: amaka._id, lender: true });
+    let row = await t.run((c) => c.db.get(amaka._id));
+    expect(row).toMatchObject({ trustedLender: true, trustedBorrower: true });
+    await admin.mutation(api.admin.setTrust, { userId: amaka._id, lender: false });
+    row = await t.run((c) => c.db.get(amaka._id));
+    expect(row).toMatchObject({ trustedLender: false, trustedBorrower: true });
+  });
+
+  it("shows owners when a requester is a trusted borrower", async () => {
+    const { admin, amaka, chidi, toolId } = await setup();
+    const { rows: users } = await admin.query(api.admin.users, { page: 1, pageSize: 25 });
+    const chidiRow = users.find((u) => u.name === "Chidi Okafor")!;
+    await admin.mutation(api.admin.setTrust, { userId: chidiRow._id, borrower: true });
+    await chidi.mutation(api.loans.request, { toolId, startDate: future(1), endDate: future(2) });
+    const page = await amaka.query(api.loans.incoming, { filter: "all", paginationOpts: { numItems: 10, cursor: null } });
+    expect(page.page[0]).toMatchObject({ person: "Chidi Okafor", personTrustedBorrower: true });
   });
 });
 

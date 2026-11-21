@@ -136,3 +136,11 @@
 .ll-admin-link:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
 .ll-admin-link__top { display: flex; align-items: center; justify-content: space-between; color: var(--ink-muted); }
 .ll-admin-link__count { font-family: var(--font-display); font-size: 28px; line-height: 32px; font-weight: 700; }
+
+/* Row "•••" menu (admin neighbours). Reuses the account menu's item style. */
+.ll-actionmenu { position: relative; display: inline-flex; }
+.ll-actionmenu__trigger { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent; color: var(--ink-muted); cursor: pointer; }
+.ll-actionmenu__trigger:hover, .ll-actionmenu__trigger[aria-expanded="true"] { background: var(--surface-2); color: var(--ink); }
+.ll-actionmenu__trigger:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ll-actionmenu__menu { position: fixed; z-index: 60; display: flex; flex-direction: column; gap: 2px; min-width: 200px; padding: var(--space-1); background: var(--surface-1); border: 1px solid var(--line); border-radius: var(--radius-md); box-shadow: var(--shadow-pop); }
+.ll-actionmenu__check { display: inline-flex; width: 16px; color: var(--pine, currentColor); }

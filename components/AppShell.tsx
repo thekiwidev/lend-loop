@@ -71,7 +71,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         ]
       : []),
   ];
-  const role = [me?.isAdmin ? "Admin" : null, me?.trustedLender ? "Trusted lender" : null].filter(Boolean).join(" · ");
+  const role = [me?.isAdmin ? "Admin" : null, me?.trustedLender ? "Trusted lender" : null, me?.trustedBorrower ? "Trusted borrower" : null].filter(Boolean).join(" · ");
 
   let content: ReactNode;
   if (syncError) {

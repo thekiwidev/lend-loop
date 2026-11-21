@@ -2,6 +2,7 @@ import { cx } from "@/lib/cx";
 import { CATEGORY } from "@/lib/labels";
 import type { Category } from "@/lib/toolIcons";
 import { ActivityLine, type ActivityItem } from "./ActivityLine";
+import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { Icon } from "./Icon";
 import { StatusBadge, type LoanStatus } from "./StatusBadge";
@@ -9,6 +10,8 @@ import { StatusBadge, type LoanStatus } from "./StatusBadge";
 export interface RequestCardProps {
   tool: { name: string; category: Category; icon?: string };
   person: string;
+  /** Incoming only: the requester is marked a trusted borrower. */
+  trustedBorrower?: boolean;
   direction?: "incoming" | "outgoing";
   status: LoanStatus;
   start: string;
@@ -25,7 +28,7 @@ export interface RequestCardProps {
 }
 
 /** Offers only the actions the loan's state allows. */
-export function RequestCard({ tool, person, direction = "incoming", status, start, end, days, activity, busy, onApprove, onDecline, onCancel, onReturn, className }: RequestCardProps) {
+export function RequestCard({ tool, person, trustedBorrower, direction = "incoming", status, start, end, days, activity, busy, onApprove, onDecline, onCancel, onReturn, className }: RequestCardProps) {
   const category = CATEGORY[tool.category] ?? CATEGORY.other;
   const incoming = direction === "incoming";
   const disabled = !!busy;
@@ -43,6 +46,12 @@ export function RequestCard({ tool, person, direction = "incoming", status, star
           {incoming ? (
             <>
               <strong>{person}</strong> wants to borrow this
+              {trustedBorrower ? (
+                <>
+                  {" "}
+                  <Badge tone="pine" icon="check">Trusted borrower</Badge>
+                </>
+              ) : null}
             </>
           ) : (
             <>

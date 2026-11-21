@@ -21,6 +21,7 @@ export interface LoanCard {
   _id: Id<"loans">;
   tool: { name: string; category: Category; icon: string };
   person: string;
+  personTrustedBorrower: boolean;
   status: LoanStatus;
   startDate: string;
   endDate: string;
@@ -83,6 +84,7 @@ export function RequestList({ direction, empty }: { direction: "incoming" | "out
               direction={direction}
               tool={loan.tool}
               person={loan.person}
+              trustedBorrower={loan.personTrustedBorrower}
               status={loan.status}
               start={loan.startDate}
               end={loan.endDate}

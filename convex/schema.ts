@@ -39,6 +39,8 @@ export default defineSchema({
     name: v.string(),
     email: v.string(),
     trustedLender: v.boolean(),
+    // Optional so rows created before it existed stay valid; missing means false.
+    trustedBorrower: v.optional(v.boolean()),
   }).index("by_clerkId", ["clerkId"]),
 
   tools: defineTable({
