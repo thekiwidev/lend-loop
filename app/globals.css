@@ -107,3 +107,12 @@
 .ll-cal__day.is-booked { text-decoration: line-through; opacity: 0.6; }
 .ll-cal__hint { margin: 0; color: var(--ink-muted); }
 .ll-range { margin: 0; display: flex; align-items: baseline; gap: var(--space-2); flex-wrap: wrap; }
+.ll-dates { display: flex; flex-direction: column; gap: var(--space-3); }
+.ll-dates__tabs { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); }
+.ll-dates__tab { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: var(--space-2) var(--space-3); border: 1px solid var(--line-strong); border-radius: var(--radius-md); background: var(--surface-1); color: var(--ink); font: inherit; text-align: left; cursor: pointer; transition: border-color 120ms ease-out, background 120ms ease-out; }
+.ll-dates__tab:hover { background: var(--surface-2); }
+.ll-dates__tab:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ll-dates__tab.is-on { border-color: var(--pine); box-shadow: inset 0 0 0 1px var(--pine); }
+.ll-dates__title { color: var(--ink-muted); }
+.ll-dates__value { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-display); font-size: 16px; font-weight: 650; }
+.ll-cal__day.is-selected { box-shadow: inset 0 0 0 2px var(--ink); }

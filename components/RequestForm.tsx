@@ -69,7 +69,6 @@ function RangeForm({
   const n = days(range);
   return (
     <form className="ll-form" onSubmit={submit} noValidate>
-      {booked.length ? <Banner tone="info">Crossed-out days are already lent. Loans run up to {MAX_DAYS} days.</Banner> : null}
       {error ? <Banner tone="danger">{error}</Banner> : null}
       <DateRangePicker value={range} onChange={setRange} today={today} booked={booked} maxDays={MAX_DAYS} />
       <p className="ll-range label">

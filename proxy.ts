@@ -1,4 +1,4 @@
-import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
+import { clerkClient, clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
 // UX gate: decides which page to show before anything renders. Convex checks again on
@@ -27,9 +27,12 @@ export default clerkMiddleware(async (auth, request) => {
   }
 
   if (isGuestOnly(request)) return redirect("/app");
-  // Role comes from Clerk public metadata in the signed session token; users cannot edit it.
-  // Same `role` claim Convex reads, so one session-token setting serves both.
-  if (isAdmin(request) && sessionClaims?.role !== "admin") return redirect("/app");
+  // Role comes from Clerk public metadata, which users cannot edit. A `role` claim in the
+  // session token answers without a network call; otherwise ask Clerk, on /admin only.
+  if (isAdmin(request) && sessionClaims?.role !== "admin") {
+    const user = await (await clerkClient()).users.getUser(userId);
+    if (user.publicMetadata.role !== "admin") return redirect("/app");
+  }
 });
 
 export const config = {
