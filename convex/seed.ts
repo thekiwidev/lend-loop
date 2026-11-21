@@ -1,3 +1,4 @@
+import { v } from "convex/values";
 import { internalMutation, type MutationCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { todayUtc } from "./lib/loanRules";
@@ -104,5 +105,21 @@ export const run = internalMutation({
       status: "pending",
     });
     return `Seeded sample tools, an overdue loan for ${realUser.name} and an incoming request.`;
+  },
+});
+
+/**
+ * Dev-only: points a seeded neighbour at a real Clerk test account, so signing in as that
+ * account opens the seeded user with its tools and loans. Run by scripts/seed-clerk-users.ts.
+ */
+export const linkClerkUser = internalMutation({
+  args: { seedId: v.string(), clerkId: v.string() },
+  handler: async (ctx, { seedId, clerkId }) => {
+    const byClerk = (id: string) => ctx.db.query("users").withIndex("by_clerkId", (q) => q.eq("clerkId", id)).unique();
+    if (await byClerk(clerkId)) return "already linked";
+    const seeded = await byClerk(seedId);
+    if (!seeded) return "not seeded";
+    await ctx.db.patch(seeded._id, { clerkId });
+    return "linked";
   },
 });
