@@ -143,3 +143,16 @@ export const incoming = query({
     return Promise.all(loans.map((l) => toCard(ctx, l, l.borrowerId, today)));
   },
 });
+
+/** Approved date ranges for a tool from today on, so the picker can grey them out. Dates only. */
+export const booked = query({
+  args: { toolId: v.id("tools") },
+  handler: async (ctx, { toolId }) => {
+    await requireUser(ctx);
+    const today = todayUtc(Date.now());
+    const loans = await approvedLoans(ctx, toolId);
+    return loans
+      .filter((l) => l.endDate >= today)
+      .map((l) => ({ startDate: l.startDate, endDate: l.endDate }));
+  },
+});

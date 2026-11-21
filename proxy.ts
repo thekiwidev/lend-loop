@@ -28,7 +28,8 @@ export default clerkMiddleware(async (auth, request) => {
 
   if (isGuestOnly(request)) return redirect("/app");
   // Role comes from Clerk public metadata in the signed session token; users cannot edit it.
-  if (isAdmin(request) && sessionClaims?.metadata?.role !== "admin") return redirect("/app");
+  // Same `role` claim Convex reads, so one session-token setting serves both.
+  if (isAdmin(request) && sessionClaims?.role !== "admin") return redirect("/app");
 });
 
 export const config = {
