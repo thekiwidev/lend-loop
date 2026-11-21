@@ -80,8 +80,8 @@ cp .env.n8n.example .env.n8n
 1. Create an application with email sign-in.
 2. **API keys**: copy the publishable and secret keys into `.env.local`.
 3. **Integrations > Convex > Activate**. Copy the **Frontend API URL**: it is the issuer Convex trusts. This also creates a JWT template named `convex`.
-4. **JWT templates > convex**: add the claim `"role": "{{user.public_metadata.role}}"`. Convex reads the admin role from this signed claim.
-5. **Sessions > Customize session token**: set `{"metadata": "{{user.public_metadata}}"}`. `proxy.ts` reads the role from this claim without a network call.
+4. **Sessions > Customize session token**: set `{"aud": "convex", "role": "{{user.public_metadata.role}}"}` and save. With `aud: "convex"` the Convex client sends this session token to Convex, and both Convex and `proxy.ts` read the admin role from its `role` claim without a network call.
+5. If you skip `aud` in step 4, the Convex client asks for a JWT template named `convex` instead: give that template the same `role` claim.
 
 ### 3. Convex (local)
 
