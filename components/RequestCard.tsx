@@ -58,6 +58,10 @@ export function RequestCard({ tool, person, direction = "incoming", status, star
           <span className="ll-mono">{end}</span>
           {days ? <span className="ll-request__days">{days === 1 ? "1 day" : `${days} days`}</span> : null}
         </p>
+        {!incoming && (status === "approved" || status === "overdue") ? (
+          // Explain over disable: only the owner can confirm they have it back.
+          <p className="ll-request__note">Hand it back to {person.split(" ")[0]}; they mark it returned.</p>
+        ) : null}
         {activity && activity.length ? <ActivityLine items={activity} compact /> : null}
       </div>
       {status === "pending" && incoming ? (
