@@ -39,6 +39,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const sync = useAction(api.users.sync);
   const [synced, setSynced] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
+  // Bumped by "Try again" so the sync effect runs again.
+  const [attempt, setAttempt] = useState(0);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const pathname = usePathname();
   const ready = isAuthenticated && synced;
@@ -49,7 +51,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     sync({})
       .then(() => setSynced(true))
       .catch((e: unknown) => setSyncError(errorMessage(e)));
-  }, [isAuthenticated, synced, sync]);
+  }, [isAuthenticated, synced, sync, attempt]);
 
   const items: NavItem[] = [
     { id: "tools", label: "All tools", icon: "grid", href: "/app", section: "Browse" },
@@ -62,7 +64,10 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   let content: ReactNode;
   if (syncError) {
-    content = <Banner tone="danger" title="Couldn’t set up your account" action={<Button size="sm" onClick={() => setSyncError(null)}>Try again</Button>}>{syncError}</Banner>;
+    content = <Banner tone="danger" title="Couldn’t set up your account" action={<Button size="sm" onClick={() => {
+      setSyncError(null);
+      setAttempt((n) => n + 1);
+    }}>Try again</Button>}>{syncError}</Banner>;
   } else if (isSignedIn && !isLoading && !isAuthenticated) {
     content = (
       <Banner tone="danger" title="LendLoop couldn’t confirm your sign-in">
