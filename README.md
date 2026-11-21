@@ -136,7 +136,9 @@ Open http://localhost:5678 to create the n8n owner account and look at the workf
 bunx convex run seed:run
 ```
 
-Sign in once before seeding so your user row exists. Sample neighbours use `example.com` addresses and are never emailed.
+Sign in once before seeding so your user row exists. Sample neighbours use `example.com` addresses and are never emailed. The seed only fills an empty shed; `bunx convex run seed:reset` clears tools, loans, automation events and the sample neighbours (real users stay).
+
+3. Optional, to sign in as the neighbours: `bun scripts/seed-clerk-users.ts` creates a Clerk test account for each (`<name>+clerk_test@example.com`, verification code `424242` if asked), links it to the seeded user, and writes the logins with one generated password to `seed-users.local.md` (git-ignored). Run it again after every `seed:reset` + `seed:run`.
 
 ## Try it
 

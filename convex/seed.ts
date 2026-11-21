@@ -47,11 +47,9 @@ async function upsertNeighbour(ctx: MutationCtx, n: (typeof NEIGHBOURS)[number])
 export const run = internalMutation({
   args: {},
   handler: async (ctx) => {
-    const alreadySeeded = await ctx.db
-      .query("users")
-      .withIndex("by_clerkId", (q) => q.eq("clerkId", NEIGHBOURS[0].clerkId))
-      .unique();
-    if (alreadySeeded) return "Already seeded. Clear the tables in the dashboard to seed again.";
+    // Seeds an empty shed only. Checking for a seed_ user is not enough: linked neighbours
+    // carry real Clerk ids, so a second run would duplicate everyone.
+    if (await ctx.db.query("tools").first()) return "Already seeded. Run seed:reset first to start again.";
 
     const ids = new Map<string, Id<"users">>();
     for (const n of NEIGHBOURS) ids.set(n.clerkId, await upsertNeighbour(ctx, n));
@@ -121,5 +119,26 @@ export const linkClerkUser = internalMutation({
     if (!seeded) return "not seeded";
     await ctx.db.patch(seeded._id, { clerkId });
     return "linked";
+  },
+});
+
+/**
+ * Dev-only: deletes every tool, loan and automation event, and the sample neighbours
+ * (example.com addresses). Real users stay, so they can sign straight back in.
+ */
+export const reset = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    for (const table of ["automationEvents", "loans", "tools"] as const) {
+      for (const row of await ctx.db.query(table).collect()) await ctx.db.delete(row._id);
+    }
+    let neighbours = 0;
+    for (const user of await ctx.db.query("users").collect()) {
+      if (user.email.endsWith("@example.com")) {
+        await ctx.db.delete(user._id);
+        neighbours++;
+      }
+    }
+    return `Cleared tools, loans, automation events and ${neighbours} sample neighbours.`;
   },
 });

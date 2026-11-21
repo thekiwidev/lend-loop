@@ -294,3 +294,18 @@ describe("pagination", () => {
     expect(await amaka.query(api.loans.dashboardStats, {})).toEqual({ onLoanNow: 0, waitingOnYou: 1, overdue: 0 });
   });
 });
+
+describe("seed", () => {
+  it("does not duplicate neighbours on a second run, and reset keeps real users", async () => {
+    const t = convexTest(schema, modules);
+    await t.withIdentity({ subject: "user_real", name: "Real Person", email: "real@lendloop.test" }).action(api.users.sync, {});
+    await t.mutation(internal.seed.run, {});
+    expect(await t.mutation(internal.seed.run, {})).toMatch(/Already seeded/);
+    const users = await t.run((c) => c.db.query("users").collect());
+    expect(users.filter((u) => u.name === "Tunde Bello")).toHaveLength(1);
+    await t.mutation(internal.seed.reset, {});
+    const left = await t.run(async (c) => ({ users: await c.db.query("users").collect(), tools: await c.db.query("tools").collect() }));
+    expect(left.tools).toHaveLength(0);
+    expect(left.users.map((u) => u.name)).toEqual(["Real Person"]);
+  });
+});
