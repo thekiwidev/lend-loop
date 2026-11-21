@@ -66,10 +66,30 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   let content: ReactNode;
   if (syncError) {
-    content = <Banner tone="danger" title="Couldn’t set up your account" action={<Button size="sm" onClick={() => {
-      setSyncError(null);
-      setAttempt((n) => n + 1);
-    }}>Try again</Button>}>{syncError}</Banner>;
+    content = (
+      <Banner
+        tone="danger"
+        title="Couldn’t set up your account"
+        action={
+          <span style={{ display: "inline-flex", gap: 8 }}>
+            <Button size="sm" variant="ghost" icon="logout" onClick={() => clerk.signOut({ redirectUrl: "/" })}>
+              Sign out
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => {
+                setSyncError(null);
+                setAttempt((n) => n + 1);
+              }}
+            >
+              Try again
+            </Button>
+          </span>
+        }
+      >
+        {syncError}
+      </Banner>
+    );
   } else if (isSignedIn && !isLoading && !isAuthenticated) {
     content = (
       <Banner tone="danger" title="LendLoop couldn’t confirm your sign-in">
