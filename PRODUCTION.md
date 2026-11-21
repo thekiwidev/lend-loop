@@ -22,7 +22,7 @@ The take-home runs everything locally. Before real neighbours use it:
 ## Abuse and load
 
 - **Rate limits** on mutations (request, create) and on the HTTP endpoints, with the Convex rate-limiter component.
-- **Pagination** on every list instead of the fixed caps.
+- **Exact totals** (all tools ever listed, all loans) with the Convex aggregate component, if those numbers are wanted.
 - A raw-body, constant-time signature check in n8n (a Code node) rather than the IF node comparison.
 
 ## Users and data

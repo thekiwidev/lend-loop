@@ -1,4 +1,5 @@
 import { ConvexError, v } from "convex/values";
+import { paginationOptsValidator } from "convex/server";
 import { mutation, query, type QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { categoryValidator, conditionValidator } from "./schema";
@@ -9,8 +10,8 @@ import { scheduleNotification } from "./automation";
 
 export const MAX_TOOL_NAME = 80;
 export const MAX_TOOL_DESCRIPTION = 500;
-// shortcut: lists read at most this many rows; add pagination when a neighbourhood outgrows it.
-const LIST_LIMIT = 300;
+// The public landing page is a preview: the newest listed tools only, never the whole shed.
+const PUBLIC_PREVIEW = 24;
 
 const toolInput = {
   name: v.string(),
@@ -56,15 +57,18 @@ export async function toolAvailability(
   return current ? { status: "on_loan", until: current.endDate } : { status: "available" };
 }
 
-/** Public landing page: available tools only, and nothing about who owns them. */
+/** Public landing page: a preview of available tools, and nothing about who owns them. */
 export const listPublic = query({
   args: {},
   handler: async (ctx) => {
     const today = todayUtc(Date.now());
-    const tools = await ctx.db.query("tools").order("desc").take(LIST_LIMIT);
-    const listed = tools.filter((t) => t.removedAt === undefined);
+    const tools = await ctx.db
+      .query("tools")
+      .filter((q) => q.eq(q.field("removedAt"), undefined))
+      .order("desc")
+      .take(PUBLIC_PREVIEW);
     const rows = await Promise.all(
-      listed.map(async (t) => ({ tool: t, availability: await toolAvailability(ctx, t._id, today) })),
+      tools.map(async (t) => ({ tool: t, availability: await toolAvailability(ctx, t._id, today) })),
     );
     return rows
       .filter((r) => r.availability.status === "available")
@@ -72,73 +76,72 @@ export const listPublic = query({
   },
 });
 
-/** Every listed tool for signed-in neighbours, with owner name and availability. */
+/** Listed tools for signed-in neighbours, a page at a time, with owner name and availability. */
 export const list = query({
-  args: { category: v.optional(categoryValidator) },
-  handler: async (ctx, { category }) => {
+  args: { category: v.optional(categoryValidator), paginationOpts: paginationOptsValidator },
+  handler: async (ctx, { category, paginationOpts }) => {
     const { user } = await requireUser(ctx);
     const today = todayUtc(Date.now());
-    const tools = category
-      ? await ctx.db
-          .query("tools")
-          .withIndex("by_category", (q) => q.eq("category", category))
-          .order("desc")
-          .take(LIST_LIMIT)
-      : await ctx.db.query("tools").order("desc").take(LIST_LIMIT);
+    const base = category
+      ? ctx.db.query("tools").withIndex("by_category", (q) => q.eq("category", category))
+      : ctx.db.query("tools");
+    const result = await base
+      .filter((q) => q.eq(q.field("removedAt"), undefined))
+      .order("desc")
+      .paginate(paginationOpts);
+    // Pending requests are an active set, small per person, so one read covers the page.
     const myPending = await ctx.db
       .query("loans")
-      .withIndex("by_borrower", (q) => q.eq("borrowerId", user._id))
-      .filter((q) => q.eq(q.field("status"), "pending"))
+      .withIndex("by_borrower_status", (q) => q.eq("borrowerId", user._id).eq("status", "pending"))
       .collect();
     const pendingToolIds = new Set(myPending.map((l) => l.toolId));
 
-    return Promise.all(
-      tools
-        .filter((t) => t.removedAt === undefined)
-        .map(async (t) => {
-          const owner = await ctx.db.get(t.ownerId);
-          const availability = await toolAvailability(ctx, t._id, today);
-          return {
-            _id: t._id,
-            name: t.name,
-            category: t.category,
-            condition: t.condition,
-            icon: t.icon,
-            description: t.description,
-            owner: { name: owner?.name ?? "A neighbour", trusted: owner?.trustedLender ?? false },
-            isMine: t.ownerId === user._id,
-            requestPending: pendingToolIds.has(t._id),
-            ...availability,
-          };
-        }),
-    );
-  },
-});
-
-/** The caller's own listings. */
-export const mine = query({
-  args: {},
-  handler: async (ctx) => {
-    const { user } = await requireUser(ctx);
-    const today = todayUtc(Date.now());
-    const tools = await ctx.db
-      .query("tools")
-      .withIndex("by_owner", (q) => q.eq("ownerId", user._id))
-      .order("desc")
-      .collect();
-    return Promise.all(
-      tools
-        .filter((t) => t.removedAt === undefined)
-        .map(async (t) => ({
+    const page = await Promise.all(
+      result.page.map(async (t) => {
+        const owner = await ctx.db.get(t.ownerId);
+        const availability = await toolAvailability(ctx, t._id, today);
+        return {
           _id: t._id,
           name: t.name,
           category: t.category,
           condition: t.condition,
           icon: t.icon,
           description: t.description,
-          ...(await toolAvailability(ctx, t._id, today)),
-        })),
+          owner: { name: owner?.name ?? "A neighbour", trusted: owner?.trustedLender ?? false },
+          isMine: t.ownerId === user._id,
+          requestPending: pendingToolIds.has(t._id),
+          ...availability,
+        };
+      }),
     );
+    return { ...result, page };
+  },
+});
+
+/** The caller's own listings, a page at a time. */
+export const mine = query({
+  args: { paginationOpts: paginationOptsValidator },
+  handler: async (ctx, { paginationOpts }) => {
+    const { user } = await requireUser(ctx);
+    const today = todayUtc(Date.now());
+    const result = await ctx.db
+      .query("tools")
+      .withIndex("by_owner", (q) => q.eq("ownerId", user._id))
+      .filter((q) => q.eq(q.field("removedAt"), undefined))
+      .order("desc")
+      .paginate(paginationOpts);
+    const page = await Promise.all(
+      result.page.map(async (t) => ({
+        _id: t._id,
+        name: t.name,
+        category: t.category,
+        condition: t.condition,
+        icon: t.icon,
+        description: t.description,
+        ...(await toolAvailability(ctx, t._id, today)),
+      })),
+    );
+    return { ...result, page };
   },
 });
 

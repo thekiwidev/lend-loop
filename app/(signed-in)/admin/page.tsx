@@ -1,12 +1,13 @@
 "use client";
 
-import { useMutation, useQuery } from "convex/react";
+import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import { useState } from "react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Avatar } from "@/components/Avatar";
 import { Banner } from "@/components/Banner";
 import { DataTable } from "@/components/DataTable";
+import { LoadMore, PAGE_SIZE } from "@/components/LoadMore";
 import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TopBar } from "@/components/TopBar";
@@ -20,10 +21,12 @@ const AUTOMATION_LABEL = { request_notification: "Email", overdue_reminder: "Rem
 /** Admin overview. Every query here is refused by Convex for non-admins. */
 export default function AdminPage() {
   const stats = useQuery(api.admin.stats);
-  const loans = useQuery(api.admin.loans);
-  const tools = useQuery(api.admin.tools);
-  const users = useQuery(api.admin.users);
-  const failures = useQuery(api.admin.workflowErrors);
+  const opts = { initialNumItems: PAGE_SIZE };
+  const loans = usePaginatedQuery(api.admin.loans, {}, opts);
+  const tools = usePaginatedQuery(api.admin.tools, {}, opts);
+  const users = usePaginatedQuery(api.admin.users, {}, opts);
+  const failures = usePaginatedQuery(api.admin.workflowErrors, {}, opts);
+  const rows = <T,>(q: { status: string; results: T[] }) => (q.status === "LoadingFirstPage" ? undefined : q.results);
   const setTrusted = useMutation(api.admin.setTrustedLender);
   const [error, setError] = useState<string | null>(null);
   const now = useNow();
@@ -42,10 +45,10 @@ export default function AdminPage() {
       <TopBar title="Admin" subtitle="Every loan and listing on the street" />
       <main className="ll-content">
         <div className="ll-stats">
-          <StatCard label="Tools listed" value={stats?.toolsListed ?? "–"} icon="wrench" />
           <StatCard label="On loan now" value={stats?.onLoan ?? "–"} icon="loop" tone="sky" />
           <StatCard label="Pending requests" value={stats?.pending ?? "–"} icon="clock" tone="brass" />
-          <StatCard label="Overdue" value={stats?.overdue ?? "–"} icon="alert" tone="clay" hint={stats?.failedAutomations ? `${stats.failedAutomations} failed automations` : undefined} />
+          <StatCard label="Overdue" value={stats?.overdue ?? "–"} icon="alert" tone="clay" />
+          <StatCard label="Failed automations" value={stats ? `${stats.failedAutomations}${stats.failedCapped ? "+" : ""}` : "–"} icon="bell" tone={stats?.failedAutomations ? "clay" : "neutral"} />
         </div>
 
         {error ? <Banner tone="danger" onDismiss={() => setError(null)}>{error}</Banner> : null}
@@ -54,7 +57,7 @@ export default function AdminPage() {
           <h2 id="loans" className="ll-section__title">All loans</h2>
           <DataTable
             caption="All loans"
-            rows={loans}
+            rows={rows(loans)}
             rowKey={(r) => r._id}
             emptyTitle="No loans yet"
             emptyIcon="loop"
@@ -79,13 +82,14 @@ export default function AdminPage() {
               },
             ]}
           />
+          <LoadMore query={loans} />
         </section>
 
         <section className="ll-section" aria-labelledby="listings">
           <h2 id="listings" className="ll-section__title">All listings</h2>
           <DataTable
             caption="All listings"
-            rows={tools}
+            rows={rows(tools)}
             rowKey={(r) => r._id}
             emptyTitle="No tools listed yet"
             rowClassName={(r) => (r.removed ? "is-removed" : undefined)}
@@ -96,13 +100,14 @@ export default function AdminPage() {
               { key: "removed", header: "Status", render: (r) => <StatusBadge status={r.removed ? "removed" : "available"}>{r.removed ? "Removed" : "Listed"}</StatusBadge> },
             ]}
           />
+          <LoadMore query={tools} />
         </section>
 
         <section className="ll-section" aria-labelledby="neighbours">
           <h2 id="neighbours" className="ll-section__title">Neighbours</h2>
           <DataTable
             caption="Neighbours"
-            rows={users}
+            rows={rows(users)}
             rowKey={(r) => r._id}
             emptyTitle="No neighbours yet"
             emptyIcon="users"
@@ -121,13 +126,14 @@ export default function AdminPage() {
               },
             ]}
           />
+          <LoadMore query={users} />
         </section>
 
         <section className="ll-section" aria-labelledby="failures">
           <h2 id="failures" className="ll-section__title">Failed automations</h2>
           <DataTable
             caption="Failed automations"
-            rows={failures}
+            rows={rows(failures)}
             rowKey={(r) => r._id}
             emptyTitle="Nothing has failed"
             emptyIcon="check"
@@ -137,6 +143,7 @@ export default function AdminPage() {
               { key: "at", header: "When", render: (r) => relativeTime(r.at, now) },
             ]}
           />
+          <LoadMore query={failures} />
         </section>
       </main>
     </>

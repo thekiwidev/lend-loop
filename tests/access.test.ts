@@ -17,6 +17,8 @@ function future(days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+const FIRST_PAGE = { numItems: 12, cursor: null };
+
 const drill = { name: "Cordless drill", category: "power", condition: "good", icon: "drill", description: "18V" } as const;
 
 async function setup() {
@@ -55,7 +57,7 @@ describe("tools", () => {
   });
 
   it("requires sign-in for the full list", async () => {
-    await expect(ctx.t.query(api.tools.list, {})).rejects.toThrow("Sign in to continue.");
+    await expect(ctx.t.query(api.tools.list, { paginationOpts: FIRST_PAGE })).rejects.toThrow("Sign in to continue.");
   });
 
   it("gives the public list no owner fields", async () => {
@@ -130,7 +132,7 @@ describe("admin", () => {
 
   it("lets an admin mark a trusted lender", async () => {
     const { admin, t } = await setup();
-    const users = await admin.query(api.admin.users, {});
+    const { page: users } = await admin.query(api.admin.users, { paginationOpts: FIRST_PAGE });
     const amaka = users.find((u) => u.name === "Amaka Obi")!;
     await admin.mutation(api.admin.setTrustedLender, { userId: amaka._id, trusted: true });
     const row = await t.run((c) => c.db.get(amaka._id));
@@ -257,5 +259,38 @@ describe("users.sync", () => {
     await t.withIdentity(AMAKA).action(api.users.sync, {});
     const rows = await t.run((c) => c.db.query("users").collect());
     expect(rows).toMatchObject([{ name: "Amaka Obi", email: "amaka@example.com" }]);
+  });
+});
+
+describe("pagination", () => {
+  it("returns one page of tools at a time and continues from the cursor", async () => {
+    const { amaka, chidi } = await setup();
+    for (let i = 0; i < 4; i++) await amaka.mutation(api.tools.create, { ...drill, name: `Drill ${i}` });
+    const first = await chidi.query(api.tools.list, { paginationOpts: { numItems: 3, cursor: null } });
+    expect(first.page).toHaveLength(3);
+    expect(first.isDone).toBe(false);
+    const second = await chidi.query(api.tools.list, { paginationOpts: { numItems: 3, cursor: first.continueCursor } });
+    expect(second.page.length).toBeGreaterThan(0);
+    const names = [...first.page, ...second.page].map((t) => t.name);
+    expect(new Set(names).size).toBe(names.length);
+  });
+
+  it("filters requests by status on the server", async () => {
+    const { amaka, chidi, toolId } = await setup();
+    const loanId = await chidi.mutation(api.loans.request, { toolId, startDate: future(1), endDate: future(2) });
+    await amaka.mutation(api.loans.decline, { loanId });
+    await chidi.mutation(api.loans.request, { toolId, startDate: future(5), endDate: future(6) });
+    const pending = await chidi.query(api.loans.myRequests, { filter: "pending", paginationOpts: FIRST_PAGE });
+    const closed = await chidi.query(api.loans.myRequests, { filter: "closed", paginationOpts: FIRST_PAGE });
+    expect(pending.page.map((l) => l.status)).toEqual(["pending"]);
+    expect(closed.page.map((l) => l.status)).toEqual(["declined"]);
+    const incoming = await amaka.query(api.loans.incoming, { filter: "all", paginationOpts: FIRST_PAGE });
+    expect(incoming.page).toHaveLength(2);
+  });
+
+  it("counts dashboard numbers from active loans", async () => {
+    const { amaka, chidi, toolId } = await setup();
+    await chidi.mutation(api.loans.request, { toolId, startDate: future(1), endDate: future(2) });
+    expect(await amaka.query(api.loans.dashboardStats, {})).toEqual({ onLoanNow: 0, waitingOnYou: 1, overdue: 0 });
   });
 });

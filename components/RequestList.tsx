@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, type ReactMutation } from "convex/react";
+import { useMutation, usePaginatedQuery, type ReactMutation } from "convex/react";
 import type { FunctionReference } from "convex/server";
 import { useState } from "react";
 import { api } from "@/convex/_generated/api";
@@ -12,6 +12,7 @@ import type { Category } from "@/lib/toolIcons";
 import { Banner } from "./Banner";
 import { EmptyState } from "./EmptyState";
 import { FilterChips } from "./FilterChips";
+import { LoadMore, PAGE_SIZE } from "./LoadMore";
 import { RequestCard, type RequestCardProps } from "./RequestCard";
 import { Skeleton } from "./Skeleton";
 import type { LoanStatus } from "./StatusBadge";
@@ -31,19 +32,11 @@ type Filter = "all" | "pending" | "active" | "closed";
 type Action = NonNullable<RequestCardProps["busy"]>;
 type LoanMutation = ReactMutation<FunctionReference<"mutation", "public", { loanId: Id<"loans"> }, null>>;
 
-const ACTIVE: readonly LoanStatus[] = ["approved", "overdue"];
-const CLOSED: readonly LoanStatus[] = ["declined", "cancelled", "returned"];
-
-function matches(filter: Filter, status: LoanStatus): boolean {
-  if (filter === "pending") return status === "pending";
-  if (filter === "active") return ACTIVE.includes(status);
-  if (filter === "closed") return CLOSED.includes(status);
-  return true;
-}
-
-/** Stack of request cards with a status filter, shared by incoming and my requests. */
-export function RequestList({ loans, direction, empty }: { loans: LoanCard[] | undefined; direction: "incoming" | "outgoing"; empty: { title: string; body: string } }) {
+/** Stack of request cards with a status filter, shared by incoming and my requests. Filtered and paged on the server. */
+export function RequestList({ direction, empty }: { direction: "incoming" | "outgoing"; empty: { title: string; body: string } }) {
   const [filter, setFilter] = useState<Filter>("all");
+  const paged = usePaginatedQuery(direction === "incoming" ? api.loans.incoming : api.loans.myRequests, { filter }, { initialNumItems: PAGE_SIZE });
+  const loans: LoanCard[] | undefined = paged.status === "LoadingFirstPage" ? undefined : paged.results;
   const [busy, setBusy] = useState<{ id: Id<"loans">; action: Action } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const approve = useMutation(api.loans.approve);
@@ -64,14 +57,13 @@ export function RequestList({ loans, direction, empty }: { loans: LoanCard[] | u
     }
   }
 
-  const count = (f: Filter) => loans?.filter((l) => matches(f, l.status)).length;
   const options = [
-    { value: "all" as Filter, label: "All", count: count("all") },
-    { value: "pending" as Filter, label: "Pending", count: count("pending") },
-    { value: "active" as Filter, label: direction === "incoming" ? "Lent out" : "Borrowed", count: count("active") },
-    { value: "closed" as Filter, label: "Closed", count: count("closed") },
+    { value: "all" as Filter, label: "All" },
+    { value: "pending" as Filter, label: "Pending" },
+    { value: "active" as Filter, label: direction === "incoming" ? "Lent out" : "Borrowed" },
+    { value: "closed" as Filter, label: "Closed" },
   ];
-  const shown = loans?.filter((l) => matches(filter, l.status));
+  const shown = loans;
 
   return (
     <section className="ll-section">
@@ -105,6 +97,7 @@ export function RequestList({ loans, direction, empty }: { loans: LoanCard[] | u
           ))}
         </div>
       )}
+      <LoadMore query={paged} />
     </section>
   );
 }

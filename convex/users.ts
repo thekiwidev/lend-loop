@@ -70,18 +70,16 @@ export const me = query({
     if (!identity) return null;
     const user = await findUserByClerkId(ctx, identity.subject);
     if (!user) return null;
-    const myTools = await ctx.db
-      .query("tools")
-      .withIndex("by_owner", (q) => q.eq("ownerId", user._id))
-      .collect();
-    const incoming = await ctx.db
-      .query("loans")
-      .withIndex("by_owner", (q) => q.eq("ownerId", user._id))
-      .collect();
-    const outgoing = await ctx.db
-      .query("loans")
-      .withIndex("by_borrower", (q) => q.eq("borrowerId", user._id))
-      .collect();
+    // Pending requests are an active set; only listings are counted across a person's history.
+    const [myTools, incomingPending, myPending] = await Promise.all([
+      ctx.db
+        .query("tools")
+        .withIndex("by_owner", (q) => q.eq("ownerId", user._id))
+        .filter((q) => q.eq(q.field("removedAt"), undefined))
+        .collect(),
+      ctx.db.query("loans").withIndex("by_owner_status", (q) => q.eq("ownerId", user._id).eq("status", "pending")).collect(),
+      ctx.db.query("loans").withIndex("by_borrower_status", (q) => q.eq("borrowerId", user._id).eq("status", "pending")).collect(),
+    ]);
     return {
       name: user.name,
       // The caller's own address only; other people's emails never reach the client.
@@ -89,9 +87,9 @@ export const me = query({
       trustedLender: user.trustedLender,
       isAdmin: hasAdminRole(identity),
       counts: {
-        listings: myTools.filter((t) => t.removedAt === undefined).length,
-        incomingPending: incoming.filter((l) => l.status === "pending").length,
-        myPending: outgoing.filter((l) => l.status === "pending").length,
+        listings: myTools.length,
+        incomingPending: incomingPending.length,
+        myPending: myPending.length,
       },
     };
   },

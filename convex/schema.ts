@@ -66,7 +66,9 @@ export default defineSchema({
     .index("by_tool", ["toolId"])
     .index("by_tool_status", ["toolId", "status"])
     .index("by_borrower", ["borrowerId"])
+    .index("by_borrower_status", ["borrowerId", "status"])
     .index("by_owner", ["ownerId"])
+    .index("by_owner_status", ["ownerId", "status"])
     .index("by_status", ["status"]),
 
   automationEvents: defineTable({
@@ -79,5 +81,6 @@ export default defineSchema({
     detail: v.optional(v.string()),
   })
     .index("by_idempotencyKey", ["idempotencyKey"])
+    .index("by_status", ["status"])
     .index("by_loan", ["loanId"]),
 });

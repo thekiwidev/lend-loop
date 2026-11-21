@@ -1,4 +1,5 @@
 import { ConvexError, v } from "convex/values";
+import { paginationOptsValidator, type PaginationOptions } from "convex/server";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { requireLoanParty, requireUser } from "./lib/access";
@@ -6,6 +7,7 @@ import {
   alreadyLentError,
   displayStatus,
   findOverlap,
+  isOutToday,
   loanDays,
   requestDatesError,
   todayUtc,
@@ -14,8 +16,8 @@ import {
 } from "./lib/loanRules";
 import { recentForLoan, scheduleNotification } from "./automation";
 
-// shortcut: request lists show the latest 100; paginate when people keep longer histories.
-const LIST_LIMIT = 100;
+const requestFilter = v.union(v.literal("all"), v.literal("pending"), v.literal("active"), v.literal("closed"));
+type RequestFilter = "all" | "pending" | "active" | "closed";
 
 async function approvedLoans(ctx: QueryCtx, toolId: Id<"tools">, exceptId?: Id<"loans">) {
   const loans = await ctx.db
@@ -114,33 +116,72 @@ async function toCard(ctx: QueryCtx, loan: Doc<"loans">, otherPartyId: Id<"users
   };
 }
 
-/** Requests the caller has made as a borrower. */
+/**
+ * One page of a person's loans, newest first. Pending and active use the status index;
+ * "closed" (declined, cancelled, returned) is the long history, filtered on the way.
+ */
+function loanPage(ctx: QueryCtx, side: "owner" | "borrower", userId: Id<"users">, filter: RequestFilter, opts: PaginationOptions) {
+  if (filter === "pending" || filter === "active") {
+    const status = filter === "pending" ? "pending" : "approved";
+    const q =
+      side === "owner"
+        ? ctx.db.query("loans").withIndex("by_owner_status", (i) => i.eq("ownerId", userId).eq("status", status))
+        : ctx.db.query("loans").withIndex("by_borrower_status", (i) => i.eq("borrowerId", userId).eq("status", status));
+    return q.order("desc").paginate(opts);
+  }
+  const q =
+    side === "owner"
+      ? ctx.db.query("loans").withIndex("by_owner", (i) => i.eq("ownerId", userId))
+      : ctx.db.query("loans").withIndex("by_borrower", (i) => i.eq("borrowerId", userId));
+  const filtered =
+    filter === "closed"
+      ? q.filter((f) => f.or(f.eq(f.field("status"), "declined"), f.eq(f.field("status"), "cancelled"), f.eq(f.field("status"), "returned")))
+      : q;
+  return filtered.order("desc").paginate(opts);
+}
+
+/** Requests the caller has made as a borrower, a page at a time. */
 export const myRequests = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { filter: requestFilter, paginationOpts: paginationOptsValidator },
+  handler: async (ctx, { filter, paginationOpts }) => {
     const { user } = await requireUser(ctx);
     const today = todayUtc(Date.now());
-    const loans = await ctx.db
-      .query("loans")
-      .withIndex("by_borrower", (q) => q.eq("borrowerId", user._id))
-      .order("desc")
-      .take(LIST_LIMIT);
-    return Promise.all(loans.map((l) => toCard(ctx, l, l.ownerId, today)));
+    const result = await loanPage(ctx, "borrower", user._id, filter, paginationOpts);
+    return { ...result, page: await Promise.all(result.page.map((l) => toCard(ctx, l, l.ownerId, today))) };
   },
 });
 
-/** Requests for the caller's tools. */
+/** Requests for the caller's tools, a page at a time. */
 export const incoming = query({
+  args: { filter: requestFilter, paginationOpts: paginationOptsValidator },
+  handler: async (ctx, { filter, paginationOpts }) => {
+    const { user } = await requireUser(ctx);
+    const today = todayUtc(Date.now());
+    const result = await loanPage(ctx, "owner", user._id, filter, paginationOpts);
+    return { ...result, page: await Promise.all(result.page.map((l) => toCard(ctx, l, l.borrowerId, today))) };
+  },
+});
+
+/**
+ * Dashboard numbers. Every count reads only active loans (pending or approved) through an
+ * index, never the growing history of finished ones.
+ */
+export const dashboardStats = query({
   args: {},
   handler: async (ctx) => {
     const { user } = await requireUser(ctx);
     const today = todayUtc(Date.now());
-    const loans = await ctx.db
-      .query("loans")
-      .withIndex("by_owner", (q) => q.eq("ownerId", user._id))
-      .order("desc")
-      .take(LIST_LIMIT);
-    return Promise.all(loans.map((l) => toCard(ctx, l, l.borrowerId, today)));
+    const [approved, waiting, lentOut, borrowed] = await Promise.all([
+      ctx.db.query("loans").withIndex("by_status", (q) => q.eq("status", "approved")).collect(),
+      ctx.db.query("loans").withIndex("by_owner_status", (q) => q.eq("ownerId", user._id).eq("status", "pending")).collect(),
+      ctx.db.query("loans").withIndex("by_owner_status", (q) => q.eq("ownerId", user._id).eq("status", "approved")).collect(),
+      ctx.db.query("loans").withIndex("by_borrower_status", (q) => q.eq("borrowerId", user._id).eq("status", "approved")).collect(),
+    ]);
+    return {
+      onLoanNow: approved.filter((l) => isOutToday(l, today)).length,
+      waitingOnYou: waiting.length,
+      overdue: [...lentOut, ...borrowed].filter((l) => l.endDate < today).length,
+    };
   },
 });
 

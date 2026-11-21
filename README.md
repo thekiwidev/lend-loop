@@ -176,7 +176,8 @@ bun run build
 - **Dates are UTC calendar dates.** "Overdue" and "today" use UTC; the reminder runs at 09:00 UTC.
 - **Resend without a verified domain** only delivers to the Resend account's own address from `onboarding@resend.dev`.
 - **The n8n side compares signatures with an IF node**, which is not constant-time, and re-serialises the parsed JSON body to verify it. That equals the raw bytes for Convex's `JSON.stringify` payloads; a different sender would need a raw-body check.
-- **Lists are capped** (300 tools, 100 requests per person, 500 rows in admin tables) rather than paginated.
+- **Lists are paginated** (12 at a time, "Show more") and filtered on the server. Dashboard and admin counts read only active loans (pending, approved) through indexes; failed automations are counted up to 100. Exact totals over all history would need the Convex aggregate component.
+- **The public landing page** previews the 24 newest listings and shows the available ones.
 - **The user row is created and refreshed on each visit** to `/app` (`users.sync` reads the profile from Clerk's API), not by a Clerk webhook.
 
 See [PRODUCTION.md](PRODUCTION.md) for what changes before real users.

@@ -1,12 +1,13 @@
 "use client";
 
-import { useMutation, useQuery } from "convex/react";
+import { useMutation, usePaginatedQuery } from "convex/react";
 import { useState } from "react";
 import { api } from "@/convex/_generated/api";
 import { Banner } from "@/components/Banner";
 import { Button } from "@/components/Button";
 import { Dialog } from "@/components/Dialog";
 import { EmptyState } from "@/components/EmptyState";
+import { LoadMore, PAGE_SIZE } from "@/components/LoadMore";
 import { Skeleton } from "@/components/Skeleton";
 import { ToolCard } from "@/components/ToolCard";
 import { ToolForm, type EditableTool } from "@/components/ToolForm";
@@ -15,7 +16,8 @@ import { errorMessage } from "@/lib/errors";
 
 /** The caller's listings: create, edit, remove. */
 export default function ListingsPage() {
-  const tools = useQuery(api.tools.mine);
+  const paged = usePaginatedQuery(api.tools.mine, {}, { initialNumItems: PAGE_SIZE });
+  const tools = paged.status === "LoadingFirstPage" ? undefined : paged.results;
   const remove = useMutation(api.tools.remove);
   const [editing, setEditing] = useState<EditableTool | "new" | null>(null);
   const [removing, setRemoving] = useState<EditableTool | null>(null);
@@ -83,6 +85,7 @@ export default function ListingsPage() {
             ))}
           </div>
         )}
+        <LoadMore query={paged} />
       </main>
       {editing ? <ToolForm key={editing === "new" ? "new" : editing._id} open tool={editing === "new" ? undefined : editing} onClose={() => setEditing(null)} /> : null}
       <Dialog

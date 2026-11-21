@@ -1,40 +1,41 @@
+import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { requireAdmin } from "./lib/access";
 import { displayStatus, isOutToday, todayUtc } from "./lib/loanRules";
 
-// shortcut: admin tables read at most this many rows; paginate for larger neighbourhoods.
-const LIMIT = 500;
+// Failed automations are shown as "100+" past this, so the count never scans the whole log.
+const FAILED_COUNT_CAP = 100;
 
+/** Street-wide numbers from active loans only (pending, approved), read through indexes. */
 export const stats = query({
   args: {},
   handler: async (ctx) => {
     await requireAdmin(ctx);
     const today = todayUtc(Date.now());
-    const tools = await ctx.db.query("tools").take(LIMIT);
-    const loans = await ctx.db.query("loans").take(LIMIT);
-    const failed = await ctx.db
-      .query("automationEvents")
-      .order("desc")
-      .take(LIMIT);
+    const [approved, pending, failed] = await Promise.all([
+      ctx.db.query("loans").withIndex("by_status", (q) => q.eq("status", "approved")).collect(),
+      ctx.db.query("loans").withIndex("by_status", (q) => q.eq("status", "pending")).collect(),
+      ctx.db.query("automationEvents").withIndex("by_status", (q) => q.eq("status", "failed")).take(FAILED_COUNT_CAP),
+    ]);
     return {
-      toolsListed: tools.filter((t) => t.removedAt === undefined).length,
-      onLoan: loans.filter((l) => isOutToday(l, today)).length,
-      pending: loans.filter((l) => l.status === "pending").length,
-      overdue: loans.filter((l) => displayStatus(l, today) === "overdue").length,
-      failedAutomations: failed.filter((e) => e.status === "failed").length,
+      onLoan: approved.filter((l) => isOutToday(l, today)).length,
+      pending: pending.length,
+      overdue: approved.filter((l) => l.endDate < today).length,
+      failedAutomations: failed.length,
+      failedCapped: failed.length === FAILED_COUNT_CAP,
     };
   },
 });
 
 export const loans = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { paginationOpts: paginationOptsValidator },
+  handler: async (ctx, { paginationOpts }) => {
     await requireAdmin(ctx);
     const today = todayUtc(Date.now());
-    const rows = await ctx.db.query("loans").order("desc").take(LIMIT);
-    return Promise.all(
-      rows.map(async (loan) => {
+    const result = await ctx.db.query("loans").order("desc").paginate(paginationOpts);
+    const page = await Promise.all(
+      result.page.map(async (loan) => {
         const [tool, owner, borrower, lastEvent] = await Promise.all([
           ctx.db.get(loan.toolId),
           ctx.db.get(loan.ownerId),
@@ -57,16 +58,17 @@ export const loans = query({
         };
       }),
     );
+    return { ...result, page };
   },
 });
 
 export const tools = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { paginationOpts: paginationOptsValidator },
+  handler: async (ctx, { paginationOpts }) => {
     await requireAdmin(ctx);
-    const rows = await ctx.db.query("tools").order("desc").take(LIMIT);
-    return Promise.all(
-      rows.map(async (tool) => {
+    const result = await ctx.db.query("tools").order("desc").paginate(paginationOpts);
+    const page = await Promise.all(
+      result.page.map(async (tool) => {
         const owner = await ctx.db.get(tool.ownerId);
         return {
           _id: tool._id,
@@ -77,28 +79,30 @@ export const tools = query({
         };
       }),
     );
+    return { ...result, page };
   },
 });
 
 /** Emails stay server-side even for admins: the table needs names only. */
 export const users = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { paginationOpts: paginationOptsValidator },
+  handler: async (ctx, { paginationOpts }) => {
     await requireAdmin(ctx);
-    const rows = await ctx.db.query("users").take(LIMIT);
-    return rows.map((u) => ({ _id: u._id, name: u.name, trustedLender: u.trustedLender }));
+    const result = await ctx.db.query("users").order("desc").paginate(paginationOpts);
+    return { ...result, page: result.page.map((u) => ({ _id: u._id, name: u.name, trustedLender: u.trustedLender })) };
   },
 });
 
 export const workflowErrors = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { paginationOpts: paginationOptsValidator },
+  handler: async (ctx, { paginationOpts }) => {
     await requireAdmin(ctx);
-    const rows = await ctx.db.query("automationEvents").order("desc").take(LIMIT);
-    return rows
-      .filter((e) => e.status === "failed")
-      .slice(0, 20)
-      .map((e) => ({ _id: e._id, kind: e.kind, at: e.at, detail: e.detail ?? "" }));
+    const result = await ctx.db
+      .query("automationEvents")
+      .withIndex("by_status", (q) => q.eq("status", "failed"))
+      .order("desc")
+      .paginate(paginationOpts);
+    return { ...result, page: result.page.map((e) => ({ _id: e._id, kind: e.kind, at: e.at, detail: e.detail ?? "" })) };
   },
 });
 
