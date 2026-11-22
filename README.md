@@ -47,6 +47,7 @@ convex/                 schema, functions, HTTP endpoints, seed
   lib/signature.ts      pure HMAC signing and verification
 lib/                    shared helpers: icon glyphs, tool-icon catalogue, labels, dates
 n8n/                    exported workflows: request-notification, overdue-reminders, error-handler
+docs/                   PRD, specification, interface design, one plan per feature
 tests/                  vitest + convex-test
 proxy.ts                Clerk route protection (Next 16 renamed middleware.ts to proxy.ts)
 docker-compose.yml      n8n
@@ -171,7 +172,7 @@ bun run build
 - `tests/loanRules.test.ts`: every allowed and refused transition, date validation, overlap edges, derived overdue.
 - `tests/signature.test.ts`: a known HMAC vector, valid, tampered body, wrong path, wrong method, wrong secret, expired timestamp.
 - `tests/toolIcons.test.ts`: suggestions ("cordless drill" gives the drill first, plurals, category fallback), every catalogue icon has a glyph.
-- `tests/access.test.ts` (convex-test): non-owners cannot edit, remove or approve; non-admins cannot use admin functions; the public list has no owner fields; unknown icons are refused; `recordEvent` with the same key twice leaves one row; a loan request posts one signed, minimal payload to n8n; three failed retries leave one failed event.
+- `tests/access.test.ts` (convex-test): non-owners cannot edit, remove or approve; non-admins cannot use admin functions; admins can remove any listing, but not one with an approved loan; the public list has no owner fields; unknown icons are refused; `recordEvent` with the same key twice leaves one row; a loan request posts one signed, minimal payload to n8n; three failed retries leave one failed event.
 
 ## Known limits
 
@@ -182,7 +183,11 @@ bun run build
 - **The public landing page** previews the 24 newest listings and shows the available ones.
 - **The user row is created and refreshed on each visit** to `/app` (`users.sync` reads the profile from Clerk's API), not by a Clerk webhook.
 
-See [PRODUCTION.md](PRODUCTION.md) for what changes before real users.
+See [PRODUCTION.md](PRODUCTION.md) for what I would change and add for production, and [DEPLOY.md](DEPLOY.md) for the production deployment.
+
+## Documentation
+
+[docs/](docs/README.md) holds the product requirements ([PRD](docs/PRD.md)), the technical specification ([SPEC](docs/SPEC.md)), the interface design ([DESIGN](docs/DESIGN.md)) and one plan per feature, with a table mapping each assignment requirement to the code that meets it.
 
 ## Credits
 

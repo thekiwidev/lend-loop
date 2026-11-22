@@ -58,7 +58,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const items: NavItem[] = [
     { id: "tools", label: "All tools", icon: "grid", href: "/app", section: "Browse" },
-    { id: "admin-listings", label: "My listings", icon: "wrench", href: "/app/listings", section: "Lending", count: me?.counts.listings },
+    { id: "listings", label: "My listings", icon: "wrench", href: "/app/listings", section: "Lending", count: me?.counts.listings },
     { id: "incoming", label: "Incoming requests", icon: "inbox", href: "/app/incoming", section: "Lending", count: me?.counts.incomingPending, urgent: true },
     { id: "requests", label: "My requests", icon: "send", href: "/app/requests", section: "Borrowing", count: me?.counts.myPending },
     ...(me?.isAdmin

@@ -1,6 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
-import { mutation, query, type QueryCtx } from "./_generated/server";
+import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { categoryValidator, conditionValidator } from "./schema";
 import { requireToolOwner, requireUser } from "./lib/access";
@@ -162,22 +162,30 @@ export const update = mutation({
   },
 });
 
-/** Soft delete. Refused while an approved loan is out or booked; pending requests are cancelled. */
+/**
+ * Soft delete, shared by the owner (`remove`) and admins (`admin.removeTool`). Refused while an
+ * approved loan is out or booked; pending requests are cancelled and their borrowers told.
+ * Callers check who may remove the tool before calling this.
+ */
+export async function removeListing(ctx: MutationCtx, tool: Doc<"tools">) {
+  const loans = await ctx.db
+    .query("loans")
+    .withIndex("by_tool", (q) => q.eq("toolId", tool._id))
+    .collect();
+  if (loans.some((l) => l.status === "approved")) {
+    throw new ConvexError(`The ${tool.name.toLowerCase()} has an approved loan. Mark it returned before removing it.`);
+  }
+  for (const loan of loans.filter((l) => l.status === "pending")) {
+    await ctx.db.patch(loan._id, { status: "cancelled" });
+    await scheduleNotification(ctx, loan._id, "cancelled", "borrower");
+  }
+  await ctx.db.patch(tool._id, { removedAt: Date.now() });
+}
+
 export const remove = mutation({
   args: { toolId: v.id("tools") },
   handler: async (ctx, { toolId }) => {
     const { tool } = await requireToolOwner(ctx, toolId);
-    const loans = await ctx.db
-      .query("loans")
-      .withIndex("by_tool", (q) => q.eq("toolId", toolId))
-      .collect();
-    if (loans.some((l) => l.status === "approved")) {
-      throw new ConvexError(`The ${tool.name.toLowerCase()} has an approved loan. Mark it returned before removing it.`);
-    }
-    for (const loan of loans.filter((l) => l.status === "pending")) {
-      await ctx.db.patch(loan._id, { status: "cancelled" });
-      await scheduleNotification(ctx, loan._id, "cancelled", "borrower");
-    }
-    await ctx.db.patch(toolId, { removedAt: Date.now() });
+    await removeListing(ctx, tool);
   },
 });

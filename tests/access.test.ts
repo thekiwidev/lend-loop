@@ -139,6 +139,24 @@ describe("admin", () => {
     await expect(users.amaka.mutation(api.admin.setTrust, { userId: "x" as Id<"users">, lender: true })).rejects.toThrow();
   });
 
+  it("lets only an admin remove someone else's listing, and cancels its pending requests", async () => {
+    const { amaka, chidi, admin, t, toolId } = await setup();
+    const loanId = await chidi.mutation(api.loans.request, { toolId, startDate: future(1), endDate: future(2) });
+    await expect(chidi.mutation(api.admin.removeTool, { toolId })).rejects.toThrow("Only neighbourhood admins");
+    await admin.mutation(api.admin.removeTool, { toolId });
+    expect((await t.run((c) => c.db.get(toolId)))?.removedAt).toBeDefined();
+    expect((await t.run((c) => c.db.get(loanId)))?.status).toBe("cancelled");
+    await expect(admin.mutation(api.admin.removeTool, { toolId })).rejects.toThrow("no longer listed");
+    await expect(amaka.query(api.tools.mine, { paginationOpts: FIRST_PAGE })).resolves.toMatchObject({ page: [] });
+  });
+
+  it("refuses an admin removal while an approved loan exists", async () => {
+    const { amaka, chidi, admin, toolId } = await setup();
+    const loanId = await chidi.mutation(api.loans.request, { toolId, startDate: future(1), endDate: future(2) });
+    await amaka.mutation(api.loans.approve, { loanId });
+    await expect(admin.mutation(api.admin.removeTool, { toolId })).rejects.toThrow("approved loan");
+  });
+
   it("lets an admin mark a trusted lender", async () => {
     const { admin, t } = await setup();
     const { rows: users } = await admin.query(api.admin.users, { page: 1, pageSize: 25 });

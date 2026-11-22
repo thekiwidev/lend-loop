@@ -1,6 +1,7 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { requireAdmin } from "./lib/access";
+import { removeListing } from "./tools";
 import { displayStatus, isOutToday, todayUtc } from "./lib/loanRules";
 import { eventCount, loanCount, toolCount, userCount } from "./lib/counts";
 import { pageArgs, pageWindow } from "./lib/pages";
@@ -118,6 +119,17 @@ export const workflowErrors = query({
             .order("desc")
             .take(w.pageSize);
     return { ...w, rows: docs.map((e) => ({ _id: e._id, kind: e.kind, at: e.at, detail: e.detail ?? "" })) };
+  },
+});
+
+/** Removes any neighbour's listing, under the same rules as the owner's own remove. */
+export const removeTool = mutation({
+  args: { toolId: v.id("tools") },
+  handler: async (ctx, { toolId }) => {
+    await requireAdmin(ctx);
+    const tool = await ctx.db.get(toolId);
+    if (!tool || tool.removedAt !== undefined) throw new ConvexError("That tool is no longer listed.");
+    await removeListing(ctx, tool);
   },
 });
 
